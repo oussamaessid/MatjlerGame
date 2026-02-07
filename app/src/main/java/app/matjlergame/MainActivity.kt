@@ -49,6 +49,10 @@ class MainActivity : ComponentActivity() {
         // Charger la pub interstitielle pour après 4 minutes
         adManager.loadTimedInterstitialAd()
 
+        // Charger les deux vidéos avec récompense
+        adManager.loadRewardedAdExtraTry()
+        adManager.loadRewardedAdSolution()
+
         // Vérifier toutes les 30 secondes si 4 minutes se sont écoulées
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
@@ -256,6 +260,7 @@ fun MathlerGameApp(
                 mode = mode,
                 viewModel = gameViewModel,
                 totalLevels = 1,
+                adManager = adManager,
                 onBack = { navigationViewModel.navigateBack() }
             )
         }

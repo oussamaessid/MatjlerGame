@@ -56,8 +56,8 @@ class GameViewModel(
 
     private fun createInitialGameState(): GameState {
         return GameState(
-            guesses = List(level.maxGuesses) { List(level.slots) { "" } },
-            tileStatuses = List(level.maxGuesses) { List(level.slots) { TileStatus.EMPTY } }
+            guesses = List(5) { List(level.slots) { "" } },  // 5 lignes au début
+            tileStatuses = List(5) { List(level.slots) { TileStatus.EMPTY } }  // 5 lignes au début
         )
     }
 
@@ -222,19 +222,18 @@ class GameViewModel(
                     saveGameState()
 
                     delay(2000)
-                    clearSavedState() // Effacer après victoire
+                    clearSavedState()
                     onLevelCompleted(true, attempts)
                 }
 
-                gameState.currentGuess == level.maxGuesses - 1 -> {
-                    val message = "😔 Perdu! Solution: ${level.solution}\n\nRevenez demain pour un nouveau défi 🌟"
-                    showMessage(message, permanent = true)
+                gameState.currentGuess == 4 -> {  // Index 4 = 5ème ligne (dernière ligne normale)
+                    // NE PAS quitter automatiquement
+                    // Le dialogue RewardedAdChoiceDialog va s'afficher
                     gameState = gameState.copy(gameOver = true, isWon = false)
                     saveGameState()
 
-                    delay(2000)
-                    clearSavedState() // Effacer après défaite
-                    onLevelCompleted(false, attempts)
+                    // PAS de delay ni onLevelCompleted ici
+                    // L'utilisateur décidera via le dialogue
                 }
 
                 else -> {
@@ -244,6 +243,105 @@ class GameViewModel(
                     )
                     saveGameState()
                 }
+            }
+        }
+    }
+
+    /**
+     * Permet de réessayer après avoir regardé une vidéo avec récompense
+     * AJOUTE une 6ème ligne bonus
+     */
+    fun addExtraTry() {
+        if (gameState.gameOver && !gameState.isWon) {
+            // AJOUTER une 6ème ligne vide
+            val newGuesses = gameState.guesses.toMutableList()
+            newGuesses.add(List(level.slots) { "" })  // Ajouter ligne 6
+
+            val newTileStatuses = gameState.tileStatuses.toMutableList()
+            newTileStatuses.add(List(level.slots) { TileStatus.EMPTY })  // Ajouter ligne 6
+
+            gameState = gameState.copy(
+                guesses = newGuesses,
+                tileStatuses = newTileStatuses,
+                currentGuess = 5,  // Index 5 = 6ème ligne
+                currentPos = 0,
+                gameOver = false,
+                message = "🎁 Essai bonus ! Réessayez"
+            )
+            saveGameState()
+
+            viewModelScope.launch {
+                delay(2500)
+                if (gameState.message == "🎁 Essai bonus ! Réessayez") {
+                    gameState = gameState.copy(message = "")
+                    saveGameState()
+                }
+            }
+        }
+    }
+
+    /**
+     * Révèle la solution complète après avoir regardé la vidéo avec récompense
+     * AJOUTE une 6ème ligne avec la solution
+     */
+    fun revealSolution() {
+        if (gameState.gameOver && !gameState.isWon) {
+            val solution = level.solution
+            val solutionChars = solution.toList().map { it.toString() }
+
+            viewModelScope.launch {
+                // AJOUTER une 6ème ligne avec la solution
+                val newGuesses = gameState.guesses.toMutableList()
+                newGuesses.add(solutionChars)  // Ajouter ligne 6 avec la solution
+
+                val newTileStatuses = gameState.tileStatuses.toMutableList()
+                newTileStatuses.add(List(level.slots) { TileStatus.EMPTY })  // Ajouter ligne 6
+
+                gameState = gameState.copy(
+                    guesses = newGuesses,
+                    tileStatuses = newTileStatuses,
+                    currentGuess = 5,  // Index 5 = 6ème ligne
+                    currentPos = level.slots,
+                    gameOver = false
+                )
+                saveGameState()
+
+                val statuses = calculateTileStatusesUseCase(solution, level.solution, level.slots)
+
+                for (i in 0 until level.slots) {
+                    delay(150)
+                    val updatedTileStatuses = gameState.tileStatuses.toMutableList()
+                    val rowStatuses = updatedTileStatuses[5].toMutableList()  // Ligne 6
+                    rowStatuses[i] = statuses[i]
+                    updatedTileStatuses[5] = rowStatuses
+                    gameState = gameState.copy(tileStatuses = updatedTileStatuses)
+                    saveGameState()
+                }
+
+                delay(300)
+
+                val attempts = gameState.currentGuess + 1
+                val message = "🎉 Bravo! Niveau réussi avec aide en $attempts essais!\n\nRevenez demain pour un nouveau défi 🌟"
+                showMessage(message, permanent = true)
+                gameState = gameState.copy(gameOver = true, isWon = true)
+                saveGameState()
+
+                delay(2000)
+                clearSavedState()
+                onLevelCompleted(true, attempts)
+            }
+        }
+    }
+
+    /**
+     * Termine le jeu comme perdu (appelé quand l'utilisateur refuse la vidéo)
+     */
+    fun finishGameAsLost() {
+        if (gameState.gameOver && !gameState.isWon) {
+            val attempts = gameState.currentGuess + 1
+            viewModelScope.launch {
+                clearSavedState()
+                onLevelCompleted(false, attempts)
             }
         }
     }

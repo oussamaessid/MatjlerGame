@@ -1,5 +1,6 @@
 package app.matjlergame.presentation.ui
 
+import android.app.Activity
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
@@ -17,6 +18,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
@@ -39,6 +41,7 @@ fun GameScreen(
     mode: GameMode,
     viewModel: GameViewModel,
     totalLevels: Int,
+    adManager: AdManager,
     onBack: () -> Unit
 ) {
     val gameState = viewModel.gameState
@@ -72,6 +75,10 @@ fun GameScreen(
 
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+
+    var showRewardedAdDialog by remember { mutableStateOf(false) }
+    var hasUsedRewardedAd by remember { mutableStateOf(false) }
 
     LaunchedEffect(gameState.message) {
         if (gameState.message.isNotEmpty()) {
@@ -84,13 +91,18 @@ fun GameScreen(
         }
     }
 
+    LaunchedEffect(gameState.gameOver, gameState.isWon) {
+        if (gameState.gameOver && !gameState.isWon && !hasUsedRewardedAd) {
+            showRewardedAdDialog = true
+        }
+    }
+
     Box(modifier = Modifier.fillMaxSize()) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .background(Color(0xFFFFFFFF))
         ) {
-            // HEADER - TOUT SUR UNE LIGNE
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -190,7 +202,8 @@ fun GameScreen(
                         verticalArrangement = Arrangement.spacedBy(4.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        for (row in 0 until level.maxGuesses) {
+                        // Afficher dynamiquement le nombre de lignes (5 normalement, 6 après vidéo)
+                        for (row in 0 until gameState.guesses.size) {
                             val offsetX by animateFloatAsState(
                                 targetValue = if (row == gameState.currentGuess && gameState.isShaking) 10f else 0f,
                                 animationSpec = spring(
@@ -219,6 +232,8 @@ fun GameScreen(
                     }
                 }
             }
+
+            Spacer(modifier = Modifier.height(16.dp))  // Marge entre les cellules et le clavier
 
             Column(
                 verticalArrangement = Arrangement.spacedBy(5.dp),
@@ -281,6 +296,33 @@ fun GameScreen(
                 contentColor = Color.White,
                 shape = RoundedCornerShape(12.dp),
                 modifier = Modifier.padding(16.dp)
+            )
+        }
+
+        if (showRewardedAdDialog) {
+            RewardedAdChoiceDialog(
+                onWatchExtraTryAd = {
+                    showRewardedAdDialog = false
+                    hasUsedRewardedAd = true
+
+                    adManager.showRewardedAdExtraTry(
+                        activity = context as Activity,
+                        onRewarded = {
+                            viewModel.addExtraTry()
+                        },
+                        onAdDismissed = {
+                            // L'utilisateur a fermé la vidéo sans la regarder
+                        }
+                    )
+                },
+                onWatchSolutionAd = {
+                    // Non utilisé
+                },
+                onDismiss = {
+                    showRewardedAdDialog = false
+                    hasUsedRewardedAd = true
+                    viewModel.finishGameAsLost()
+                }
             )
         }
     }
