@@ -56,17 +56,71 @@ fun GameScreen(
     val screenWidth = configuration.screenWidthDp.dp
 
     val availableWidth = screenWidth - 32.dp
-    val tileSpacing = 4.dp
+    val tileSpacing = when {
+        screenWidth < 360.dp -> 3.dp
+        else -> 4.dp
+    }
     val totalSpacing = tileSpacing * (level.slots - 1)
     var tileSize = (availableWidth - totalSpacing) / level.slots
-    if (tileSize > 44.dp) tileSize = 44.dp
-    if (screenWidth < 380.dp && level.slots >= 6) tileSize = minOf(tileSize, 38.dp)
+    tileSize = when {
+        screenWidth < 360.dp && level.slots >= 6 -> minOf(tileSize, 35.dp)
+        screenWidth < 380.dp && level.slots >= 6 -> minOf(tileSize, 38.dp)
+        screenWidth < 400.dp -> minOf(tileSize, 42.dp)
+        else -> minOf(tileSize, 48.dp)
+    }
 
     val keyButtonHeight = when {
-        screenHeight < 600.dp -> 42.dp
-        screenHeight < 700.dp -> 46.dp
-        screenHeight < 800.dp -> 50.dp
-        else -> 54.dp
+        screenHeight < 600.dp -> 40.dp
+        screenHeight < 700.dp -> 44.dp
+        screenHeight < 800.dp -> 48.dp
+        else -> 52.dp
+    }
+
+    // Tailles de texte responsives
+    val headerTextSize = when {
+        screenWidth < 360.dp -> 11.sp
+        screenWidth < 400.dp -> 12.sp
+        else -> 13.sp
+    }
+
+    val targetTextSize = when {
+        screenWidth < 360.dp -> 18.sp
+        screenWidth < 400.dp -> 20.sp
+        else -> 22.sp
+    }
+
+    val objectiveTextSize = when {
+        screenWidth < 360.dp -> 13.sp
+        screenWidth < 400.dp -> 14.sp
+        else -> 15.sp
+    }
+
+    val legendTextSize = when {
+        screenWidth < 360.dp -> 10.sp
+        screenWidth < 400.dp -> 11.sp
+        else -> 12.sp
+    }
+
+    val keyTextSize = when {
+        screenWidth < 360.dp -> 16.sp
+        screenWidth < 400.dp -> 18.sp
+        else -> 20.sp
+    }
+
+    val actionKeyTextSize = when {
+        screenWidth < 360.dp -> 13.sp
+        screenWidth < 400.dp -> 14.sp
+        else -> 16.sp
+    }
+
+    val iconSize = when {
+        screenWidth < 360.dp -> 36.dp
+        else -> 40.dp
+    }
+
+    val headerPadding = when {
+        screenWidth < 360.dp -> 10.dp
+        else -> 12.dp
     }
 
     val keyStatuses = remember(gameState.guesses, gameState.tileStatuses) {
@@ -81,7 +135,7 @@ fun GameScreen(
     var hasUsedRewardedAd by remember { mutableStateOf(false) }
 
     LaunchedEffect(gameState.message) {
-        if (gameState.message.isNotEmpty()) {
+        if (gameState.message.isNotEmpty() && !gameState.gameOver) {
             scope.launch {
                 snackbarHostState.showSnackbar(
                     message = gameState.message,
@@ -93,7 +147,12 @@ fun GameScreen(
 
     LaunchedEffect(gameState.gameOver, gameState.isWon) {
         if (gameState.gameOver && !gameState.isWon && !hasUsedRewardedAd) {
-            showRewardedAdDialog = true
+            if (adManager.isRewardedAdExtraTryAvailable()) {
+                showRewardedAdDialog = true
+            } else {
+                hasUsedRewardedAd = true
+                viewModel.finishGameAsLost()
+            }
         }
     }
 
@@ -103,19 +162,20 @@ fun GameScreen(
                 .fillMaxSize()
                 .background(Color(0xFFFFFFFF))
         ) {
+            // Header avec cible
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .background(modeColor)
                     .statusBarsPadding()
-                    .padding(horizontal = 12.dp, vertical = 12.dp),
+                    .padding(horizontal = headerPadding, vertical = headerPadding),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 IconButton(
                     onClick = onBack,
                     modifier = Modifier
-                        .size(40.dp)
+                        .size(iconSize)
                         .clip(CircleShape)
                         .background(Color.White.copy(alpha = 0.3f))
                 ) {
@@ -123,7 +183,7 @@ fun GameScreen(
                         imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                         contentDescription = "Retour",
                         tint = Color.White,
-                        modifier = Modifier.size(22.dp)
+                        modifier = Modifier.size(20.dp)
                     )
                 }
 
@@ -133,18 +193,18 @@ fun GameScreen(
                     modifier = Modifier
                         .clip(RoundedCornerShape(10.dp))
                         .background(Color.White.copy(alpha = 0.2f))
-                        .padding(horizontal = 16.dp, vertical = 6.dp)
+                        .padding(horizontal = 14.dp, vertical = 6.dp)
                 ) {
                     Text(
                         text = "CIBLE:",
-                        fontSize = 13.sp,
+                        fontSize = headerTextSize,
                         fontWeight = FontWeight.Bold,
                         color = Color.White.copy(alpha = 0.9f),
                         letterSpacing = 0.5.sp
                     )
                     Text(
                         text = level.target.toString(),
-                        fontSize = 22.sp,
+                        fontSize = targetTextSize,
                         fontWeight = FontWeight.Black,
                         color = Color.White
                     )
@@ -152,7 +212,7 @@ fun GameScreen(
 
                 Text(
                     text = java.text.SimpleDateFormat("dd/MM", java.util.Locale.getDefault()).format(java.util.Date()),
-                    fontSize = 13.sp,
+                    fontSize = headerTextSize,
                     fontWeight = FontWeight.Medium,
                     color = Color.White,
                     modifier = Modifier
@@ -162,9 +222,10 @@ fun GameScreen(
                 )
             }
 
+            // Zone de jeu
             Column(
                 modifier = Modifier
-                    .padding(top = 16.dp)
+                    .padding(top = if (screenHeight < 600.dp) 12.dp else 16.dp)
                     .fillMaxWidth(),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center
@@ -173,6 +234,7 @@ fun GameScreen(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
+                    // Objectif
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -181,28 +243,31 @@ fun GameScreen(
                     ) {
                         Text(
                             text = "Objectif : atteindre ${level.target}",
-                            fontSize = 15.sp,
+                            fontSize = objectiveTextSize,
                             fontWeight = FontWeight.Medium,
                             color = Color(0xFF334155),
                             textAlign = TextAlign.Center
                         )
                     }
 
+                    // Légende
                     Row(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(
+                            if (screenWidth < 360.dp) 6.dp else 8.dp
+                        ),
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier.padding(vertical = 4.dp)
                     ) {
-                        LegendItem(Color(0xFF6AAA64), "✓ Correct")
-                        LegendItem(Color(0xFFC9B458), "⚠ Mauvais")
-                        LegendItem(Color(0xFF787C7E), "✗ Absent")
+                        LegendItem(Color(0xFF6AAA64), "✓ Correct", legendTextSize)
+                        LegendItem(Color(0xFFC9B458), "⚠ Mauvais", legendTextSize)
+                        LegendItem(Color(0xFF787C7E), "✗ Absent", legendTextSize)
                     }
 
+                    // Grille de jeu
                     Column(
-                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                        verticalArrangement = Arrangement.spacedBy(tileSpacing),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        // Afficher dynamiquement le nombre de lignes (5 normalement, 6 après vidéo)
                         for (row in 0 until gameState.guesses.size) {
                             val offsetX by animateFloatAsState(
                                 targetValue = if (row == gameState.currentGuess && gameState.isShaking) 10f else 0f,
@@ -214,7 +279,7 @@ fun GameScreen(
                             )
 
                             Row(
-                                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                horizontalArrangement = Arrangement.spacedBy(tileSpacing),
                                 modifier = Modifier.offset(x = offsetX.dp)
                             ) {
                                 for (col in 0 until level.slots) {
@@ -233,45 +298,123 @@ fun GameScreen(
                 }
             }
 
-            Spacer(modifier = Modifier.height(16.dp))  // Marge entre les cellules et le clavier
+            Spacer(modifier = Modifier.height(if (screenHeight < 600.dp) 8.dp else 16.dp))
 
+            // Clavier
             Column(
-                verticalArrangement = Arrangement.spacedBy(5.dp),
+                verticalArrangement = Arrangement.spacedBy(
+                    if (screenHeight < 600.dp) 4.dp else 5.dp
+                ),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 16.dp)
+                    .padding(
+                        horizontal = 16.dp,
+                        vertical = if (screenHeight < 600.dp) 8.dp else 16.dp
+                    )
             ) {
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(
+                        if (screenWidth < 360.dp) 4.dp else 6.dp
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
                     listOf("7", "8", "9", "/").forEach { key ->
-                        KeyButton(key = key, status = keyStatuses[key] ?: TileStatus.EMPTY, onClick = { viewModel.handleKeyPress(key) }, height = keyButtonHeight, modifier = Modifier.weight(1f))
+                        KeyButton(
+                            key = key,
+                            status = keyStatuses[key] ?: TileStatus.EMPTY,
+                            onClick = { viewModel.handleKeyPress(key) },
+                            height = keyButtonHeight,
+                            textSize = keyTextSize,
+                            modifier = Modifier.weight(1f)
+                        )
                     }
                 }
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(
+                        if (screenWidth < 360.dp) 4.dp else 6.dp
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
                     listOf("4", "5", "6", "*").forEach { key ->
-                        KeyButton(key = key, status = keyStatuses[key] ?: TileStatus.EMPTY, onClick = { viewModel.handleKeyPress(key) }, height = keyButtonHeight, modifier = Modifier.weight(1f))
+                        KeyButton(
+                            key = key,
+                            status = keyStatuses[key] ?: TileStatus.EMPTY,
+                            onClick = { viewModel.handleKeyPress(key) },
+                            height = keyButtonHeight,
+                            textSize = keyTextSize,
+                            modifier = Modifier.weight(1f)
+                        )
                     }
                 }
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(
+                        if (screenWidth < 360.dp) 4.dp else 6.dp
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
                     listOf("1", "2", "3", "-").forEach { key ->
-                        KeyButton(key = key, status = keyStatuses[key] ?: TileStatus.EMPTY, onClick = { viewModel.handleKeyPress(key) }, height = keyButtonHeight, modifier = Modifier.weight(1f))
+                        KeyButton(
+                            key = key,
+                            status = keyStatuses[key] ?: TileStatus.EMPTY,
+                            onClick = { viewModel.handleKeyPress(key) },
+                            height = keyButtonHeight,
+                            textSize = keyTextSize,
+                            modifier = Modifier.weight(1f)
+                        )
                     }
                 }
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
-                    ActionKeyButton("DEL", Color(0xFFFEE2E2), Color(0xFFB91C1C), onClick = { viewModel.handleKeyPress("DELETE") }, height = keyButtonHeight, modifier = Modifier.weight(1f))
-                    KeyButton(key = "0", status = keyStatuses["0"] ?: TileStatus.EMPTY, onClick = { viewModel.handleKeyPress("0") }, height = keyButtonHeight, modifier = Modifier.weight(1f))
-                    KeyButton(key = "+", status = keyStatuses["+"] ?: TileStatus.EMPTY, onClick = { viewModel.handleKeyPress("+") }, height = keyButtonHeight, modifier = Modifier.weight(1f))
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(
+                        if (screenWidth < 360.dp) 4.dp else 6.dp
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    ActionKeyButton(
+                        key = "DEL",
+                        backgroundColor = Color(0xFFFEE2E2),
+                        textColor = Color(0xFFB91C1C),
+                        onClick = { viewModel.handleKeyPress("DELETE") },
+                        height = keyButtonHeight,
+                        textSize = actionKeyTextSize,
+                        modifier = Modifier.weight(1f)
+                    )
+                    KeyButton(
+                        key = "0",
+                        status = keyStatuses["0"] ?: TileStatus.EMPTY,
+                        onClick = { viewModel.handleKeyPress("0") },
+                        height = keyButtonHeight,
+                        textSize = keyTextSize,
+                        modifier = Modifier.weight(1f)
+                    )
+                    KeyButton(
+                        key = "+",
+                        status = keyStatuses["+"] ?: TileStatus.EMPTY,
+                        onClick = { viewModel.handleKeyPress("+") },
+                        height = keyButtonHeight,
+                        textSize = keyTextSize,
+                        modifier = Modifier.weight(1f)
+                    )
                 }
                 Row(modifier = Modifier.fillMaxWidth()) {
-                    ActionKeyButton("VALIDER", Color(0xFFDCFCE7), Color(0xFF15803D), onClick = { viewModel.handleKeyPress("ENTER") }, height = keyButtonHeight, modifier = Modifier.fillMaxWidth())
+                    ActionKeyButton(
+                        key = "VALIDER",
+                        backgroundColor = Color(0xFFDCFCE7),
+                        textColor = Color(0xFF15803D),
+                        onClick = { viewModel.handleKeyPress("ENTER") },
+                        height = keyButtonHeight,
+                        textSize = actionKeyTextSize,
+                        modifier = Modifier.fillMaxWidth()
+                    )
                 }
             }
 
+            // Bannière publicitaire
             AndroidView(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(60.dp),
+                    .height(if (screenHeight < 600.dp) 50.dp else 60.dp),
                 factory = { context ->
                     AdView(context).apply {
                         setAdSize(AdSize.BANNER)
@@ -282,6 +425,7 @@ fun GameScreen(
             )
         }
 
+        // Snackbar
         SnackbarHost(
             hostState = snackbarHostState,
             modifier = Modifier.align(Alignment.Center)
@@ -299,7 +443,8 @@ fun GameScreen(
             )
         }
 
-        if (showRewardedAdDialog) {
+        // Dialogue de récompense - N'afficher que si la vidéo est disponible
+        if (showRewardedAdDialog && adManager.isRewardedAdExtraTryAvailable()) {
             RewardedAdChoiceDialog(
                 onWatchExtraTryAd = {
                     showRewardedAdDialog = false
@@ -311,12 +456,10 @@ fun GameScreen(
                             viewModel.addExtraTry()
                         },
                         onAdDismissed = {
-                            // L'utilisateur a fermé la vidéo sans la regarder
                         }
                     )
                 },
                 onWatchSolutionAd = {
-                    // Non utilisé
                 },
                 onDismiss = {
                     showRewardedAdDialog = false
@@ -414,6 +557,7 @@ private fun KeyButton(
     status: TileStatus,
     onClick: () -> Unit,
     height: Dp,
+    textSize: androidx.compose.ui.unit.TextUnit,
     modifier: Modifier = Modifier
 ) {
     val backgroundColor by animateColorAsState(
@@ -443,7 +587,7 @@ private fun KeyButton(
         Text(
             text = key,
             fontWeight = FontWeight.Bold,
-            fontSize = 20.sp,
+            fontSize = textSize,
             color = textColor
         )
     }
@@ -456,6 +600,7 @@ private fun ActionKeyButton(
     textColor: Color,
     onClick: () -> Unit,
     height: Dp,
+    textSize: androidx.compose.ui.unit.TextUnit,
     modifier: Modifier = Modifier
 ) {
     Box(
@@ -470,27 +615,31 @@ private fun ActionKeyButton(
         Text(
             text = key,
             fontWeight = FontWeight.Bold,
-            fontSize = 16.sp,
+            fontSize = textSize,
             color = textColor
         )
     }
 }
 
 @Composable
-private fun LegendItem(color: Color, text: String) {
+private fun LegendItem(
+    color: Color,
+    text: String,
+    textSize: androidx.compose.ui.unit.TextUnit
+) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         Box(
             modifier = Modifier
-                .size(16.dp)
+                .size(14.dp)
                 .clip(RoundedCornerShape(4.dp))
                 .background(color)
         )
         Text(
             text = text,
-            fontSize = 12.sp,
+            fontSize = textSize,
             fontWeight = FontWeight.SemiBold,
             color = Color(0xFF334155)
         )

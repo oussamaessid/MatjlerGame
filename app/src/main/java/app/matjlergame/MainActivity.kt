@@ -6,9 +6,6 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.lifecycleScope
-import androidx.lifecycle.repeatOnLifecycle
 import app.matjlergame.ads.AdManager
 import app.matjlergame.data.repository.LevelRepositoryImpl
 import app.matjlergame.domain.model.GameMode
@@ -26,9 +23,6 @@ import app.matjlergame.presentation.ui.NoInternetDialog
 import app.matjlergame.presentation.viewmodel.GameViewModel
 import app.matjlergame.presentation.viewmodel.NavigationViewModel
 import app.matjlergame.utils.NetworkChecker
-import kotlinx.coroutines.GlobalScope
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     private lateinit var adManager: AdManager
@@ -46,22 +40,8 @@ class MainActivity : ComponentActivity() {
             adManager.showAppOpenAd(this)
         }
 
-        // Charger la pub interstitielle pour après 4 minutes
-        adManager.loadTimedInterstitialAd()
-
-        // Charger les deux vidéos avec récompense
         adManager.loadRewardedAdExtraTry()
         adManager.loadRewardedAdSolution()
-
-        // Vérifier toutes les 30 secondes si 4 minutes se sont écoulées
-        lifecycleScope.launch {
-            repeatOnLifecycle(Lifecycle.State.STARTED) {
-                while (true) {
-                    delay(30_000) // 30 secondes
-                    adManager.checkAndShowTimedAd(this@MainActivity)
-                }
-            }
-        }
 
         setContent {
             MaterialTheme {
@@ -72,11 +52,6 @@ class MainActivity : ComponentActivity() {
                 )
             }
         }
-    }
-
-    override fun onResume() {
-        super.onResume()
-        adManager.checkAndShowTimedAd(this)
     }
 }
 
@@ -102,7 +77,6 @@ fun MathlerGameApp(
     var showNoInternetDialog by remember { mutableStateOf(false) }
     var hasCheckedInternet by remember { mutableStateOf(false) }
 
-    // Vérifier si c'est la première fois que l'app est lancée
     var isFirstLaunch by remember {
         mutableStateOf(sharedPreferences.getBoolean("is_first_launch", true))
     }
@@ -115,10 +89,8 @@ fun MathlerGameApp(
             }
         }
 
-        // Si c'est le premier lancement, naviguer vers HowToPlay
         if (isFirstLaunch) {
             navigationViewModel.navigateToHowToPlay()
-            // Marquer comme non première fois
             sharedPreferences.edit().putBoolean("is_first_launch", false).apply()
             isFirstLaunch = false
         }
@@ -169,12 +141,14 @@ fun MathlerGameApp(
                             }
                             isLoading = false
                         } else {
+                            // Charger le niveau quotidien
                             val dailyLevel = dailyLevelManager.getDailyLevel(mode)
                             if (dailyLevel == null) {
                                 showNoInternetDialog = true
                                 isLoading = false
                             } else {
                                 navigationViewModel.navigateToGame(mode)
+                                isLoading = false
                             }
                         }
                     }
@@ -184,6 +158,7 @@ fun MathlerGameApp(
                 }
             )
 
+            // Afficher le dialogue de résultats si disponible
             if (showResultDialog && dialogMode != null && dialogResult != null && dialogStats != null) {
                 DailyResultDialog(
                     mode = dialogMode!!,
@@ -215,44 +190,33 @@ fun MathlerGameApp(
                 return@MathlerGameApp
             }
 
-            var shouldShowDialogAfterGame by remember { mutableStateOf(false) }
-
             val gameViewModel = remember(level) {
                 GameViewModel(
                     level = level,
                     validateExpressionUseCase = validateExpressionUseCase,
                     calculateTileStatusesUseCase = calculateTileStatusesUseCase,
                     onLevelCompleted = { won, attempts ->
+                        // Sauvegarder le résultat
                         dailyLevelManager.saveTodayResult(mode, won, attempts, sharedPreferences)
                         dailyLevelManager.updateStatistics(mode, won, sharedPreferences)
 
-                        shouldShowDialogAfterGame = true
+                        // Préparer les données du dialogue
+                        val result = dailyLevelManager.getTodayResult(mode, sharedPreferences)
+                        val stats = dailyLevelManager.getStatistics(mode, sharedPreferences)
 
-                        GlobalScope.launch {
-                            delay(2000)
-                            navigationViewModel.navigateBack()
+                        if (result != null) {
+                            dialogMode = mode
+                            dialogResult = result
+                            dialogStats = stats
+                            showResultDialog = true
                         }
+
+                        navigationViewModel.navigateBack()
                     },
                     totalLevels = 1,
                     mode = mode,
                     sharedPreferences = sharedPreferences
                 )
-            }
-
-            LaunchedEffect(shouldShowDialogAfterGame) {
-                if (shouldShowDialogAfterGame) {
-                    delay(2500)
-
-                    val result = dailyLevelManager.getTodayResult(mode, sharedPreferences)
-                    val stats = dailyLevelManager.getStatistics(mode, sharedPreferences)
-
-                    if (result != null) {
-                        dialogMode = mode
-                        dialogResult = result
-                        dialogStats = stats
-                        showResultDialog = true
-                    }
-                }
             }
 
             GameScreen(
