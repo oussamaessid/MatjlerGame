@@ -1,24 +1,75 @@
 package app.matjlergame.domain.usecase
 
 import android.content.SharedPreferences
+import android.util.Log
 import app.matjlergame.domain.model.GameMode
 import app.matjlergame.domain.model.Level
-import app.matjlergame.domain.repository.LevelRepository
+import app.matjlergame.data.repository.LevelRepositoryImpl
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit
 
 class DailyLevelManager(
-    private val repository: LevelRepository
+    private val repository: LevelRepositoryImpl
 ) {
     private val startDate = LocalDate.of(2026, 1, 1)
 
+    companion object {
+        private const val TAG = "DailyLevelManager"
+    }
+
     /**
-     * Récupère le niveau du jour pour un mode donné
+     * NOUVELLE MÉTHODE - Charge le niveau quotidien de manière asynchrone
+     * Utilisez cette méthode pour éviter de bloquer l'UI
+     */
+    fun loadDailyLevelAsync(mode: GameMode, callback: (Level?) -> Unit) {
+        Log.d(TAG, "🔄 Chargement du niveau quotidien pour $mode...")
+
+        // Si les données ne sont pas chargées, les charger d'abord
+        if (!repository.isLoaded()) {
+            Log.d(TAG, "Données non chargées, chargement depuis l'API...")
+
+            repository.loadDataAsync { success ->
+                if (success) {
+                    // Données chargées, récupérer le niveau
+                    val level = getDailyLevelFromCache(mode)
+                    callback(level)
+                } else {
+                    // Échec du chargement
+                    Log.e(TAG, "❌ Échec du chargement des données")
+                    callback(null)
+                }
+            }
+        } else {
+            // Données déjà chargées
+            val level = getDailyLevelFromCache(mode)
+            callback(level)
+        }
+    }
+
+    /**
+     * MÉTHODE EXISTANTE - Récupère le niveau du jour pour un mode donné
      * Les niveaux s'affichent dans l'ordre du JSON, un par jour
+     *
+     * ⚠️ Cette méthode peut retourner null si les données ne sont pas chargées
+     * Préférez utiliser loadDailyLevelAsync() pour le chargement initial
      */
     fun getDailyLevel(mode: GameMode): Level? {
+        if (!repository.isLoaded()) {
+            Log.w(TAG, "⚠️ getDailyLevel appelé alors que les données ne sont pas chargées")
+            return null
+        }
+        return getDailyLevelFromCache(mode)
+    }
+
+    /**
+     * Méthode interne pour récupérer le niveau du cache
+     */
+    private fun getDailyLevelFromCache(mode: GameMode): Level? {
         val allLevels = repository.getLevelsForMode(mode)
-        if (allLevels.isEmpty()) return null
+        if (allLevels.isEmpty()) {
+            Log.e(TAG, "❌ Aucun niveau trouvé pour le mode $mode")
+            return null
+        }
 
         val today = LocalDate.now()
         val daysSinceStart = ChronoUnit.DAYS.between(startDate, today)
@@ -29,7 +80,15 @@ class DailyLevelManager(
             0
         }
 
-        return allLevels.getOrNull(index)
+        val level = allLevels.getOrNull(index)
+
+        if (level != null) {
+            Log.d(TAG, "✅ Niveau quotidien pour $mode: #${level.number}, cible=${level.target}, solution=${level.solution}")
+        } else {
+            Log.e(TAG, "❌ Impossible de récupérer le niveau à l'index $index")
+        }
+
+        return level
     }
 
     /**
@@ -83,6 +142,8 @@ class DailyLevelManager(
         }
 
         markAsPlayed(mode, sharedPreferences)
+
+        Log.d(TAG, "💾 Résultat sauvegardé pour $mode: won=$won, attempts=$attempts")
     }
 
     /**
@@ -119,7 +180,22 @@ class DailyLevelManager(
             putInt("stats_${mode.name}_max_streak", newMaxStreak)
             apply()
         }
+
+        Log.d(TAG, "📊 Statistiques mises à jour pour $mode: played=$newPlayed, won=$newWon, streak=$newStreak")
     }
+
+    /**
+     * Force le rechargement des données depuis l'API
+     */
+    fun refreshData(callback: (Boolean) -> Unit) {
+        Log.d(TAG, "🔄 Rechargement des données depuis l'API...")
+        repository.refreshData(callback)
+    }
+
+    /**
+     * Vérifie si les données sont chargées
+     */
+    fun isDataLoaded(): Boolean = repository.isLoaded()
 }
 
 data class DailyResult(

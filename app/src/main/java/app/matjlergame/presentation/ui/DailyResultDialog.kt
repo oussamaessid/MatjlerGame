@@ -86,9 +86,22 @@ fun DailyResultDialog(
 
                     Text(
                         text = if (result.won) {
-                            "Résolu en ${result.attempts}/6 essais"
+                            when (result.attempts) {
+                                in 1..5 -> {
+                                    // Victoire normale (lignes 1-5)
+                                    "Résolu en ${result.attempts}/5 essais"
+                                }
+                                6 -> {
+                                    // Victoire avec aide vidéo (ligne 6)
+                                    "Résolu avec aide vidéo\n(essai bonus)"
+                                }
+                                else -> {
+                                    // Cas imprévu
+                                    "Résolu en ${result.attempts} essais"
+                                }
+                            }
                         } else {
-                            "Vous avez utilisé tous vos essais"
+                            "Vous avez utilisé tous vos 5 essais"
                         },
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Medium,
