@@ -19,7 +19,6 @@ class AdManager(private val context: Context) {
     private var rewardedAdExtraTry: RewardedAd? = null
     private var rewardedAdSolution: RewardedAd? = null
 
-    // Annonces interstitielles en fallback
     private var interstitialExtraTry: InterstitialAd? = null
     private var interstitialSolution: InterstitialAd? = null
 
@@ -31,7 +30,6 @@ class AdManager(private val context: Context) {
 
     private var hasShownAppOpenAd = false
 
-    // Flags pour éviter les tentatives multiples en cas d'échec
     private var appOpenLoadFailed = false
     private var extraTryLoadFailed = false
     private var solutionLoadFailed = false
@@ -39,8 +37,7 @@ class AdManager(private val context: Context) {
     companion object {
         private const val TAG = "AdManager"
 
-        // IMPORTANT: Passer à true pour les tests, false pour la production
-        private const val USE_TEST_ADS = false  // CHANGER À false EN PRODUCTION
+        private const val USE_TEST_ADS = false
 
         private const val TEST_APP_OPEN_ID = "ca-app-pub-3940256099942544/9257395921"
         private const val TEST_BANNER_MODE_SELECT_ID = "ca-app-pub-3940256099942544/6300978111"
@@ -49,14 +46,12 @@ class AdManager(private val context: Context) {
         private const val TEST_REWARDED_VIDEO_SOLUTION_ID = "ca-app-pub-3940256099942544/5224354917"
         private const val TEST_INTERSTITIAL_ID = "ca-app-pub-3940256099942544/1033173712"
 
-        // IDs réels - Rewarded Ads (priorité)
         private const val PROD_APP_OPEN_ID = "ca-app-pub-4161995857939030/6856571786"
         private const val PROD_BANNER_MODE_SELECT_ID = "ca-app-pub-4161995857939030/7131903958"
         private const val PROD_BANNER_GAME_ID = "ca-app-pub-4161995857939030/7494099094"
         private const val PROD_REWARDED_VIDEO_EXTRA_TRY_ID = "ca-app-pub-4161995857939030/7582944991"
         private const val PROD_REWARDED_VIDEO_SOLUTION_ID = "ca-app-pub-4161995857939030/2664816346"
 
-        // IDs réels - Interstitial Ads (fallback)
         private const val PROD_INTERSTITIAL_EXTRA_TRY_ID = "ca-app-pub-2498267529185476/6361352920"
         private const val PROD_INTERSTITIAL_SOLUTION_ID = "ca-app-pub-2498267529185476/4880859723"
 
@@ -130,9 +125,6 @@ class AdManager(private val context: Context) {
         }
     }
 
-    /**
-     * Charge les annonces pour Extra Try : Rewarded en priorité, puis Interstitial en fallback
-     */
     fun loadRewardedAdExtraTry(onAdLoaded: () -> Unit = {}) {
         if (isLoadingRewardedExtraTry || extraTryLoadFailed) return
 
@@ -159,7 +151,6 @@ class AdManager(private val context: Context) {
                         rewardedAdExtraTry = null
                         isLoadingRewardedExtraTry = false
 
-                        // Charger l'interstitiel en fallback
                         Log.d(TAG, "🔄 Chargement Interstitiel EXTRA TRY en fallback...")
                         loadInterstitialExtraTry()
                     }
@@ -172,9 +163,6 @@ class AdManager(private val context: Context) {
         }
     }
 
-    /**
-     * Charge l'interstitiel Extra Try en fallback
-     */
     private fun loadInterstitialExtraTry() {
         if (isLoadingInterstitialExtraTry) return
 
@@ -248,9 +236,6 @@ class AdManager(private val context: Context) {
         }
     }
 
-    /**
-     * Charge l'interstitiel Solution en fallback
-     */
     private fun loadInterstitialSolution() {
         if (isLoadingInterstitialSolution) return
 
@@ -321,23 +306,17 @@ class AdManager(private val context: Context) {
         }
     }
 
-    /**
-     * Affiche Extra Try : Rewarded en priorité, sinon Interstitial
-     */
     fun showRewardedAdExtraTry(
         activity: Activity,
         onRewarded: () -> Unit,
         onAdDismissed: () -> Unit = {}
     ) {
-        // Priorité 1: Rewarded Ad
         if (rewardedAdExtraTry != null) {
             showRewardedExtraTry(activity, onRewarded, onAdDismissed)
         }
-        // Priorité 2: Interstitial Ad (fallback)
         else if (interstitialExtraTry != null) {
             showInterstitialExtraTry(activity, onRewarded, onAdDismissed)
         }
-        // Aucune annonce disponible
         else {
             Log.d(TAG, "⏳ Aucune annonce EXTRA TRY disponible")
             onAdDismissed()
@@ -383,15 +362,13 @@ class AdManager(private val context: Context) {
         try {
             interstitialExtraTry?.fullScreenContentCallback = object : FullScreenContentCallback() {
                 override fun onAdDismissedFullScreenContent() {
-                    Log.d(TAG, "✅ Interstitiel EXTRA TRY fermé")
                     interstitialExtraTry = null
-                    onRewarded() // On donne quand même la récompense
+                    onRewarded()
                     onAdDismissed()
                     loadInterstitialExtraTry()
                 }
 
                 override fun onAdFailedToShowFullScreenContent(adError: AdError) {
-                    Log.e(TAG, "❌ Échec Interstitiel EXTRA TRY: ${adError.message}")
                     interstitialExtraTry = null
                     onAdDismissed()
                 }
@@ -399,7 +376,6 @@ class AdManager(private val context: Context) {
 
             interstitialExtraTry?.show(activity)
         } catch (e: Exception) {
-            Log.e(TAG, "❌ Exception Interstitiel EXTRA TRY", e)
             onAdDismissed()
         }
     }
@@ -409,15 +385,12 @@ class AdManager(private val context: Context) {
         onRewarded: () -> Unit,
         onAdDismissed: () -> Unit = {}
     ) {
-        // Priorité 1: Rewarded Ad
         if (rewardedAdSolution != null) {
             showRewardedSolution(activity, onRewarded, onAdDismissed)
         }
-        // Priorité 2: Interstitial Ad (fallback)
         else if (interstitialSolution != null) {
             showInterstitialSolution(activity, onRewarded, onAdDismissed)
         }
-        // Aucune annonce disponible
         else {
             Log.d(TAG, "⏳ Aucune annonce SOLUTION disponible")
             onAdDismissed()
@@ -432,21 +405,18 @@ class AdManager(private val context: Context) {
         try {
             rewardedAdSolution?.fullScreenContentCallback = object : FullScreenContentCallback() {
                 override fun onAdDismissedFullScreenContent() {
-                    Log.d(TAG, "✅ Rewarded SOLUTION fermée")
                     rewardedAdSolution = null
                     onAdDismissed()
                     loadRewardedAdSolution()
                 }
 
                 override fun onAdFailedToShowFullScreenContent(adError: AdError) {
-                    Log.e(TAG, "❌ Échec Rewarded SOLUTION: ${adError.message}")
                     rewardedAdSolution = null
                     onAdDismissed()
                 }
             }
 
             rewardedAdSolution?.show(activity) { rewardItem ->
-                Log.d(TAG, "🎁 Récompense SOLUTION gagnée")
                 onRewarded()
             }
         } catch (e: Exception) {
@@ -463,9 +433,8 @@ class AdManager(private val context: Context) {
         try {
             interstitialSolution?.fullScreenContentCallback = object : FullScreenContentCallback() {
                 override fun onAdDismissedFullScreenContent() {
-                    Log.d(TAG, "✅ Interstitiel SOLUTION fermé")
                     interstitialSolution = null
-                    onRewarded() // On donne quand même la récompense
+                    onRewarded()
                     onAdDismissed()
                     loadInterstitialSolution()
                 }

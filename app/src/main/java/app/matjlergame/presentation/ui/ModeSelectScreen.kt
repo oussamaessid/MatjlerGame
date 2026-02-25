@@ -1,5 +1,8 @@
 package app.matjlergame.presentation.ui
 
+import android.content.Context
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.Spring
@@ -32,6 +35,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -42,6 +46,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -52,6 +57,18 @@ import com.google.android.gms.ads.AdRequest
 import com.google.android.gms.ads.AdSize
 import com.google.android.gms.ads.AdView
 
+/**
+ * Vérifie la connexion internet de façon fiable avec NET_CAPABILITY_VALIDATED.
+ * Sans VALIDATED, un Wi-Fi sans accès réel (captive portal) serait vu comme connecté.
+ */
+private fun checkInternet(context: Context): Boolean {
+    val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+    val network = cm.activeNetwork ?: return false
+    val caps = cm.getNetworkCapabilities(network) ?: return false
+    return caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+            && caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
+}
+
 @Composable
 fun ModeSelectScreen(
     adManager: AdManager,
@@ -59,6 +76,33 @@ fun ModeSelectScreen(
     onModeSelected: (GameMode) -> Unit,
     onHowToPlayClicked: () -> Unit = {}
 ) {
+    val context = LocalContext.current
+
+    // ✅ FIX : null = pas encore vérifié → le dialog n'est JAMAIS affiché sur null
+    // Le flash "NoInternetDialog" au premier lancement venait du fait que
+    // l'état initial était false, avant que la vérification réseau ne tourne.
+    var isConnected by remember { mutableStateOf<Boolean?>(null) }
+    var showNoInternetDialog by remember { mutableStateOf(false) }
+
+    // Vérification lancée une seule fois, après le premier rendu du Composable
+    LaunchedEffect(Unit) {
+        isConnected = checkInternet(context)
+        if (isConnected == false) {
+            showNoInternetDialog = true
+        }
+    }
+
+    // ✅ Dialog affiché UNIQUEMENT si isConnected est explicitement false
+    if (showNoInternetDialog && isConnected == false) {
+        NoInternetDialog(
+            onDismiss = { showNoInternetDialog = false },
+            onRetry = {
+                isConnected = checkInternet(context)
+                showNoInternetDialog = isConnected == false
+            }
+        )
+    }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -72,6 +116,8 @@ fun ModeSelectScreen(
             modifier = Modifier.fillMaxSize(),
             verticalArrangement = Arrangement.SpaceBetween
         ) {
+
+            // ── Header ──────────────────────────────────────────────────────
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -108,7 +154,7 @@ fun ModeSelectScreen(
                     modifier = Modifier.padding(24.dp)
                 ) {
                     val infiniteTransition = rememberInfiniteTransition(label = "title")
-                    val scale by infiniteTransition.animateFloat(
+                    val titleScale by infiniteTransition.animateFloat(
                         initialValue = 1f,
                         targetValue = 1.05f,
                         animationSpec = infiniteRepeatable(
@@ -120,7 +166,7 @@ fun ModeSelectScreen(
 
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier.scale(scale)
+                        modifier = Modifier.scale(titleScale)
                     ) {
                         Text(
                             text = "🎯 Equal To",
@@ -139,13 +185,23 @@ fun ModeSelectScreen(
 
                     Spacer(modifier = Modifier.height(16.dp))
 
+                    // ✅ Cartes cliquables seulement si connexion confirmée ET pas en chargement
+                    // Si isConnected == null (vérif en cours), les cartes sont grises mais pas bloquantes :
+                    // au clic, on re-vérifie en temps réel avant de naviguer.
+                    val cardsEnabled = !isLoading && isConnected != null
+
                     ModeCard(
                         title = "FACILE",
                         emoji = "🌱",
                         description = "Pour débuter",
                         gradient = listOf(Color(0xFF4CAF50), Color(0xFF8BC34A)),
-                        enabled = !isLoading,
-                        onClick = { onModeSelected(GameMode.EASY) }
+                        enabled = cardsEnabled,
+                        onClick = {
+                            val connected = checkInternet(context)
+                            isConnected = connected
+                            if (connected) onModeSelected(GameMode.EASY)
+                            else showNoInternetDialog = true
+                        }
                     )
 
                     ModeCard(
@@ -153,8 +209,13 @@ fun ModeSelectScreen(
                         emoji = "⚡",
                         description = "Un peu plus dur",
                         gradient = listOf(Color(0xFFFF9800), Color(0xFFFFB74D)),
-                        enabled = !isLoading,
-                        onClick = { onModeSelected(GameMode.MEDIUM) }
+                        enabled = cardsEnabled,
+                        onClick = {
+                            val connected = checkInternet(context)
+                            isConnected = connected
+                            if (connected) onModeSelected(GameMode.MEDIUM)
+                            else showNoInternetDialog = true
+                        }
                     )
 
                     ModeCard(
@@ -162,18 +223,24 @@ fun ModeSelectScreen(
                         emoji = "🔥",
                         description = "Expert seulement",
                         gradient = listOf(Color(0xFFF44336), Color(0xFFE91E63)),
-                        enabled = !isLoading,
-                        onClick = { onModeSelected(GameMode.HARD) }
+                        enabled = cardsEnabled,
+                        onClick = {
+                            val connected = checkInternet(context)
+                            isConnected = connected
+                            if (connected) onModeSelected(GameMode.HARD)
+                            else showNoInternetDialog = true
+                        }
                     )
                 }
             }
 
+            // ── Bannière pub ─────────────────────────────────────────────────
             AndroidView(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(60.dp),
-                factory = { context ->
-                    AdView(context).apply {
+                factory = { ctx ->
+                    AdView(ctx).apply {
                         setAdSize(AdSize.BANNER)
                         adUnitId = AdManager.BANNER_MODE_SELECT_AD_UNIT_ID
                         loadAd(AdRequest.Builder().build())
@@ -182,6 +249,7 @@ fun ModeSelectScreen(
             )
         }
 
+        // ── Overlay chargement ───────────────────────────────────────────────
         if (isLoading) {
             Box(
                 modifier = Modifier
@@ -209,6 +277,10 @@ fun ModeSelectScreen(
         }
     }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ModeCard — inchangé
+// ─────────────────────────────────────────────────────────────────────────────
 
 @Composable
 private fun ModeCard(

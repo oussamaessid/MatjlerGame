@@ -212,18 +212,11 @@ class GameViewModel(
 
             delay(300)
 
-            // attempts = le vrai nombre de lignes utilisées
-            // Ligne 1 (index 0) = 1
-            // Ligne 2 (index 1) = 2
-            // ...
-            // Ligne 5 (index 4) = 5
-            // Ligne 6 (index 5) = 6
             val attempts = gameState.currentGuess + 1
 
             when {
                 guessStr == level.solution -> {
                     val message = if (attempts == 6) {
-                        // Victoire sur la ligne 6 (avec aide vidéo)
                         "🎉 Bravo! Niveau réussi avec aide vidéo!\n\nRevenez demain pour un nouveau défi 🌟"
                     } else {
                         // Victoire sur les lignes 1-5
