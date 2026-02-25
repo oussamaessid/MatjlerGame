@@ -34,7 +34,7 @@ import com.google.android.gms.ads.AdRequest
 import com.google.android.gms.ads.AdSize
 import com.google.android.gms.ads.AdView
 import kotlinx.coroutines.launch
-
+import androidx.activity.compose.BackHandler
 @Composable
 fun GameScreen(
     level: Level,
@@ -44,6 +44,11 @@ fun GameScreen(
     adManager: AdManager,
     onBack: () -> Unit
 ) {
+
+    BackHandler(enabled = true) {
+        onBack()
+    }
+
     val gameState = viewModel.gameState
     val modeColor = when(mode) {
         GameMode.EASY -> Color(0xFF4CAF50)

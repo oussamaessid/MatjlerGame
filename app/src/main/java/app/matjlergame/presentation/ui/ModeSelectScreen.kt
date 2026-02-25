@@ -80,9 +80,6 @@ fun ModeSelectScreen(
 ) {
     val context = LocalContext.current
 
-    // ✅ FIX : null = pas encore vérifié → le dialog n'est JAMAIS affiché sur null
-    // Le flash "NoInternetDialog" au premier lancement venait du fait que
-    // l'état initial était false, avant que la vérification réseau ne tourne.
     var isConnected by remember { mutableStateOf<Boolean?>(null) }
     var showNoInternetDialog by remember { mutableStateOf(false) }
 

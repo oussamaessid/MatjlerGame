@@ -37,7 +37,6 @@ class MainActivity : ComponentActivity() {
 
         adManager = AdManager(this)
 
-        // Initialiser AdMob de manière asynchrone pour ne pas bloquer l'UI
         try {
             adManager.initialize()
         } catch (e: Exception) {
@@ -54,7 +53,6 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-        // Charger les annonces après un délai pour ne pas bloquer le démarrage
         window.decorView.postDelayed({
             try {
                 adManager.loadAppOpenAd {
@@ -88,27 +86,20 @@ fun MathlerGameApp(
     var dialogStats by remember { mutableStateOf<Statistics?>(null) }
 
     var isLoading by remember { mutableStateOf(false) }
+
+    // ✅ Affiché UNIQUEMENT quand l'utilisateur sélectionne un mode sans connexion
     var showNoInternetDialog by remember { mutableStateOf(false) }
-    var hasCheckedInternet by remember { mutableStateOf(false) }
 
-    // Compteur pour le temps de chargement
     var loadingTimeSeconds by remember { mutableStateOf(0) }
-
-    // Cache pour éviter de charger le niveau deux fois
     var cachedLevel by remember { mutableStateOf<Pair<GameMode, Level>?>(null) }
 
     var isFirstLaunch by remember {
         mutableStateOf(sharedPreferences.getBoolean("is_first_launch", true))
     }
 
+    // ✅ LaunchedEffect uniquement pour gérer le premier lancement (HowToPlay)
+    // Plus de vérification internet ici — elle se fait uniquement dans onModeSelected
     LaunchedEffect(Unit) {
-        if (!hasCheckedInternet) {
-            hasCheckedInternet = true
-            if (!NetworkChecker.isInternetAvailable(context)) {
-                showNoInternetDialog = true
-            }
-        }
-
         if (isFirstLaunch) {
             navigationViewModel.navigateToHowToPlay()
             sharedPreferences.edit().putBoolean("is_first_launch", false).apply()
@@ -116,6 +107,7 @@ fun MathlerGameApp(
         }
     }
 
+    // ✅ Dialog affiché UNIQUEMENT si déclenché par onModeSelected
     if (showNoInternetDialog) {
         NoInternetDialog(
             onDismiss = { showNoInternetDialog = false },
@@ -135,7 +127,6 @@ fun MathlerGameApp(
         }
 
         Screen.MODE_SELECT -> {
-            // Nettoyer le cache quand on retourne à l'écran de sélection
             LaunchedEffect(Unit) {
                 cachedLevel = null
                 isLoading = false
@@ -143,9 +134,11 @@ fun MathlerGameApp(
 
             ModeSelectScreen(
                 adManager = adManager,
-                isLoading = false,  // On gère le loading séparément avec ApiLoadingDialog
+                isLoading = false,
                 onModeSelected = { mode ->
                     if (!isLoading) {
+
+                        // ✅ Vérification internet UNIQUEMENT ici, au clic sur un mode
                         if (!NetworkChecker.isInternetAvailable(context)) {
                             showNoInternetDialog = true
                             return@ModeSelectScreen
@@ -167,35 +160,35 @@ fun MathlerGameApp(
                             }
                             isLoading = false
                         } else {
-                            // Charger le niveau quotidien de manière asynchrone avec timeout
                             isLoading = true
                             loadingTimeSeconds = 0
                             val startTime = System.currentTimeMillis()
-                            val timeoutMillis = 120000L // 2 minutes
+                            val timeoutMillis = 120000L
                             var loadingCompleted = false
 
-                            // Thread pour mettre à jour le compteur et vérifier le timeout
                             Thread {
                                 while (!loadingCompleted &&
                                     (System.currentTimeMillis() - startTime) < timeoutMillis) {
                                     Thread.sleep(1000)
                                     context.runOnUiThread {
-                                        loadingTimeSeconds = ((System.currentTimeMillis() - startTime) / 1000).toInt()
+                                        loadingTimeSeconds =
+                                            ((System.currentTimeMillis() - startTime) / 1000).toInt()
                                     }
                                 }
 
                                 if (!loadingCompleted) {
-                                    // Timeout dépassé
                                     context.runOnUiThread {
                                         isLoading = false
                                         loadingTimeSeconds = 0
                                         showNoInternetDialog = true
-                                        Log.e("MathlerGame", "⏱️ Timeout dépassé après ${(System.currentTimeMillis() - startTime) / 1000} secondes")
+                                        Log.e(
+                                            "MathlerGame",
+                                            "⏱️ Timeout dépassé après ${(System.currentTimeMillis() - startTime) / 1000} secondes"
+                                        )
                                     }
                                 }
                             }.start()
 
-                            // Charger le niveau
                             dailyLevelManager.loadDailyLevelAsync(mode) { dailyLevel ->
                                 loadingCompleted = true
                                 context.runOnUiThread {
@@ -204,7 +197,6 @@ fun MathlerGameApp(
                                         showNoInternetDialog = true
                                         isLoading = false
                                     } else {
-                                        // Mettre en cache le niveau chargé
                                         cachedLevel = Pair(mode, dailyLevel)
                                         navigationViewModel.navigateToGame(mode)
                                         isLoading = false
@@ -219,7 +211,6 @@ fun MathlerGameApp(
                 }
             )
 
-            // Afficher le dialogue de chargement API
             if (isLoading) {
                 ApiLoadingDialog(
                     loadingTimeSeconds = loadingTimeSeconds,
@@ -227,7 +218,6 @@ fun MathlerGameApp(
                 )
             }
 
-            // Afficher le dialogue de résultats si disponible
             if (showResultDialog && dialogMode != null && dialogResult != null && dialogStats != null) {
                 DailyResultDialog(
                     mode = dialogMode!!,
@@ -244,11 +234,9 @@ fun MathlerGameApp(
         }
 
         Screen.GAME -> {
-            // Utiliser le niveau en cache au lieu de le recharger
             val mode = navigationViewModel.selectedMode
 
             if (mode == null) {
-                // Si pas de mode sélectionné, retourner à l'écran de sélection
                 LaunchedEffect(Unit) {
                     Log.e("MathlerGame", "Mode null dans GAME screen")
                     navigationViewModel.navigateBack()
@@ -256,11 +244,9 @@ fun MathlerGameApp(
                 return@MathlerGameApp
             }
 
-            // Récupérer le niveau du cache
             val level = if (cachedLevel != null && cachedLevel!!.first == mode) {
                 cachedLevel!!.second
             } else {
-                // Si pas en cache, essayer de charger (fallback)
                 try {
                     dailyLevelManager.getDailyLevel(mode)
                 } catch (e: Exception) {
@@ -284,11 +270,9 @@ fun MathlerGameApp(
                     validateExpressionUseCase = validateExpressionUseCase,
                     calculateTileStatusesUseCase = calculateTileStatusesUseCase,
                     onLevelCompleted = { won, attempts ->
-                        // Sauvegarder le résultat
                         dailyLevelManager.saveTodayResult(mode, won, attempts, sharedPreferences)
                         dailyLevelManager.updateStatistics(mode, won, sharedPreferences)
 
-                        // Préparer les données du dialogue
                         val result = dailyLevelManager.getTodayResult(mode, sharedPreferences)
                         val stats = dailyLevelManager.getStatistics(mode, sharedPreferences)
 
@@ -298,8 +282,6 @@ fun MathlerGameApp(
                             dialogStats = stats
                             showResultDialog = true
                         }
-
-                        // Nettoyer le cache
                         cachedLevel = null
                         navigationViewModel.navigateBack()
                     },
