@@ -414,8 +414,10 @@ fun GameScreen(
             AndroidView(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(if (screenHeight < 600.dp) 50.dp else 60.dp),
-                factory = { context ->
+                    .wrapContentHeight()
+                    .padding(bottom = 8.dp)
+                    .navigationBarsPadding(),
+                        factory = { context ->
                     AdView(context).apply {
                         setAdSize(AdSize.BANNER)
                         adUnitId = AdManager.BANNER_GAME_AD_UNIT_ID
@@ -443,7 +445,6 @@ fun GameScreen(
             )
         }
 
-        // Dialogue de récompense - N'afficher que si la vidéo est disponible
         if (showRewardedAdDialog && adManager.isRewardedAdExtraTryAvailable()) {
             RewardedAdChoiceDialog(
                 onWatchExtraTryAd = {

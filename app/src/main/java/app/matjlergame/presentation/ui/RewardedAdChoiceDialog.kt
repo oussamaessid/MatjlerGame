@@ -13,7 +13,7 @@ fun RewardedAdChoiceDialog(
     onDismiss: () -> Unit
 ) {
     AlertDialog(
-        onDismissRequest = { }, // Vide pour empêcher la fermeture automatique
+        onDismissRequest = { },
         title = {
             Text(
                 text = "Dernier essai disponible ! 🎁",

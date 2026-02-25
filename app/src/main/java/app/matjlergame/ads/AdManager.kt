@@ -37,7 +37,7 @@ class AdManager(private val context: Context) {
     companion object {
         private const val TAG = "AdManager"
 
-        private const val USE_TEST_ADS = false
+        private const val USE_TEST_ADS = true
 
         private const val TEST_APP_OPEN_ID = "ca-app-pub-3940256099942544/9257395921"
         private const val TEST_BANNER_MODE_SELECT_ID = "ca-app-pub-3940256099942544/6300978111"

@@ -22,10 +22,12 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -235,10 +237,13 @@ fun ModeSelectScreen(
             }
 
             // ── Bannière pub ─────────────────────────────────────────────────
+            // APRÈS
             AndroidView(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(60.dp),
+                    .wrapContentHeight()
+                    .padding(bottom = 8.dp)
+                    .navigationBarsPadding(),
                 factory = { ctx ->
                     AdView(ctx).apply {
                         setAdSize(AdSize.BANNER)
@@ -249,7 +254,6 @@ fun ModeSelectScreen(
             )
         }
 
-        // ── Overlay chargement ───────────────────────────────────────────────
         if (isLoading) {
             Box(
                 modifier = Modifier
@@ -277,10 +281,6 @@ fun ModeSelectScreen(
         }
     }
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// ModeCard — inchangé
-// ─────────────────────────────────────────────────────────────────────────────
 
 @Composable
 private fun ModeCard(
