@@ -37,7 +37,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -80,24 +79,15 @@ fun ModeSelectScreen(
 ) {
     val context = LocalContext.current
 
-    var isConnected by remember { mutableStateOf<Boolean?>(null) }
+    // ✅ Plus de vérification automatique à l'ouverture de l'écran.
+    // La vérification se fait uniquement au clic sur un mode.
     var showNoInternetDialog by remember { mutableStateOf(false) }
 
-    // Vérification lancée une seule fois, après le premier rendu du Composable
-    LaunchedEffect(Unit) {
-        isConnected = checkInternet(context)
-        if (isConnected == false) {
-            showNoInternetDialog = true
-        }
-    }
-
-    // ✅ Dialog affiché UNIQUEMENT si isConnected est explicitement false
-    if (showNoInternetDialog && isConnected == false) {
+    if (showNoInternetDialog) {
         NoInternetDialog(
             onDismiss = { showNoInternetDialog = false },
             onRetry = {
-                isConnected = checkInternet(context)
-                showNoInternetDialog = isConnected == false
+                if (checkInternet(context)) showNoInternetDialog = false
             }
         )
     }
@@ -184,10 +174,9 @@ fun ModeSelectScreen(
 
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    // ✅ Cartes cliquables seulement si connexion confirmée ET pas en chargement
-                    // Si isConnected == null (vérif en cours), les cartes sont grises mais pas bloquantes :
-                    // au clic, on re-vérifie en temps réel avant de naviguer.
-                    val cardsEnabled = !isLoading && isConnected != null
+                    // ✅ Les cartes sont actives dès que l'écran est affiché et pas en chargement.
+                    // La vérification internet se fait au moment du clic.
+                    val cardsEnabled = !isLoading
 
                     ModeCard(
                         title = "FACILE",
@@ -196,9 +185,7 @@ fun ModeSelectScreen(
                         gradient = listOf(Color(0xFF4CAF50), Color(0xFF8BC34A)),
                         enabled = cardsEnabled,
                         onClick = {
-                            val connected = checkInternet(context)
-                            isConnected = connected
-                            if (connected) onModeSelected(GameMode.EASY)
+                            if (checkInternet(context)) onModeSelected(GameMode.EASY)
                             else showNoInternetDialog = true
                         }
                     )
@@ -210,9 +197,7 @@ fun ModeSelectScreen(
                         gradient = listOf(Color(0xFFFF9800), Color(0xFFFFB74D)),
                         enabled = cardsEnabled,
                         onClick = {
-                            val connected = checkInternet(context)
-                            isConnected = connected
-                            if (connected) onModeSelected(GameMode.MEDIUM)
+                            if (checkInternet(context)) onModeSelected(GameMode.MEDIUM)
                             else showNoInternetDialog = true
                         }
                     )
@@ -224,9 +209,7 @@ fun ModeSelectScreen(
                         gradient = listOf(Color(0xFFF44336), Color(0xFFE91E63)),
                         enabled = cardsEnabled,
                         onClick = {
-                            val connected = checkInternet(context)
-                            isConnected = connected
-                            if (connected) onModeSelected(GameMode.HARD)
+                            if (checkInternet(context)) onModeSelected(GameMode.HARD)
                             else showNoInternetDialog = true
                         }
                     )
@@ -234,7 +217,6 @@ fun ModeSelectScreen(
             }
 
             // ── Bannière pub ─────────────────────────────────────────────────
-            // APRÈS
             AndroidView(
                 modifier = Modifier
                     .fillMaxWidth()
