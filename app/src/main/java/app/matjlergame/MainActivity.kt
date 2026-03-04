@@ -87,7 +87,7 @@ fun MathlerGameApp(
 
     var isLoading by remember { mutableStateOf(false) }
 
-    // ✅ Affiché UNIQUEMENT quand l'utilisateur sélectionne un mode sans connexion
+    // ✅ Ce dialog est déclenché UNIQUEMENT dans onModeSelected, jamais au lancement
     var showNoInternetDialog by remember { mutableStateOf(false) }
 
     var loadingTimeSeconds by remember { mutableStateOf(0) }
@@ -97,8 +97,8 @@ fun MathlerGameApp(
         mutableStateOf(sharedPreferences.getBoolean("is_first_launch", true))
     }
 
-    // ✅ LaunchedEffect uniquement pour gérer le premier lancement (HowToPlay)
-    // Plus de vérification internet ici — elle se fait uniquement dans onModeSelected
+    // ✅ Seul LaunchedEffect autorisé au lancement : gérer le premier lancement (HowToPlay)
+    // AUCUNE vérification internet ici
     LaunchedEffect(Unit) {
         if (isFirstLaunch) {
             navigationViewModel.navigateToHowToPlay()
@@ -107,14 +107,13 @@ fun MathlerGameApp(
         }
     }
 
-    // ✅ Dialog affiché UNIQUEMENT si déclenché par onModeSelected
+    // ✅ Dialog internet affiché UNIQUEMENT si déclenché par onModeSelected
     if (showNoInternetDialog) {
         NoInternetDialog(
             onDismiss = { showNoInternetDialog = false },
             onRetry = {
-                if (NetworkChecker.isInternetAvailable(context)) {
-                    showNoInternetDialog = false
-                }
+                showNoInternetDialog = false
+                // L'utilisateur devra re-cliquer sur le mode souhaité
             }
         )
     }
@@ -134,11 +133,11 @@ fun MathlerGameApp(
 
             ModeSelectScreen(
                 adManager = adManager,
-                isLoading = false,
+                isLoading = isLoading,
                 onModeSelected = { mode ->
                     if (!isLoading) {
 
-                        // ✅ Vérification internet UNIQUEMENT ici, au clic sur un mode
+                        // ✅ Vérification internet UNIQUEMENT ici, déclenchée par le clic utilisateur
                         if (!NetworkChecker.isInternetAvailable(context)) {
                             showNoInternetDialog = true
                             return@ModeSelectScreen
@@ -183,7 +182,7 @@ fun MathlerGameApp(
                                         showNoInternetDialog = true
                                         Log.e(
                                             "MathlerGame",
-                                            "⏱️ Timeout dépassé après ${(System.currentTimeMillis() - startTime) / 1000} secondes"
+                                            "⏱️ Timeout après ${(System.currentTimeMillis() - startTime) / 1000}s"
                                         )
                                     }
                                 }
@@ -305,15 +304,11 @@ fun MathlerGameApp(
         }
 
         Screen.LEVEL_SELECT -> {
-            LaunchedEffect(Unit) {
-                navigationViewModel.navigateBack()
-            }
+            LaunchedEffect(Unit) { navigationViewModel.navigateBack() }
         }
 
         else -> {
-            LaunchedEffect(Unit) {
-                navigationViewModel.navigateBack()
-            }
+            LaunchedEffect(Unit) { navigationViewModel.navigateBack() }
         }
     }
 }

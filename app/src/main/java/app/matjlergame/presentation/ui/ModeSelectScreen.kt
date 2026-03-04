@@ -1,8 +1,5 @@
 package app.matjlergame.presentation.ui
 
-import android.content.Context
-import android.net.ConnectivityManager
-import android.net.NetworkCapabilities
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.Spring
@@ -54,21 +51,13 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import app.matjlergame.ads.AdManager
 import app.matjlergame.domain.model.GameMode
+import app.matjlergame.utils.NetworkChecker
 import com.google.android.gms.ads.AdRequest
 import com.google.android.gms.ads.AdSize
 import com.google.android.gms.ads.AdView
 
-/**
- * Vérifie la connexion internet de façon fiable avec NET_CAPABILITY_VALIDATED.
- * Sans VALIDATED, un Wi-Fi sans accès réel (captive portal) serait vu comme connecté.
- */
-private fun checkInternet(context: Context): Boolean {
-    val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
-    val network = cm.activeNetwork ?: return false
-    val caps = cm.getNetworkCapabilities(network) ?: return false
-    return caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
-            && caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
-}
+// ✅ SUPPRIMÉ : plus de fonction checkInternet locale ici.
+// La vérification se fait uniquement via NetworkChecker au moment du clic.
 
 @Composable
 fun ModeSelectScreen(
@@ -79,15 +68,16 @@ fun ModeSelectScreen(
 ) {
     val context = LocalContext.current
 
-    // ✅ Plus de vérification automatique à l'ouverture de l'écran.
-    // La vérification se fait uniquement au clic sur un mode.
+    // ✅ Le dialog n'est affiché QUE si l'utilisateur clique sur un mode sans connexion.
+    // Il n'est JAMAIS déclenché automatiquement à l'ouverture de l'écran.
     var showNoInternetDialog by remember { mutableStateOf(false) }
 
     if (showNoInternetDialog) {
         NoInternetDialog(
             onDismiss = { showNoInternetDialog = false },
             onRetry = {
-                if (checkInternet(context)) showNoInternetDialog = false
+                showNoInternetDialog = false
+                // L'utilisateur devra re-cliquer sur le mode souhaité
             }
         )
     }
@@ -174,8 +164,6 @@ fun ModeSelectScreen(
 
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    // ✅ Les cartes sont actives dès que l'écran est affiché et pas en chargement.
-                    // La vérification internet se fait au moment du clic.
                     val cardsEnabled = !isLoading
 
                     ModeCard(
@@ -185,8 +173,12 @@ fun ModeSelectScreen(
                         gradient = listOf(Color(0xFF4CAF50), Color(0xFF8BC34A)),
                         enabled = cardsEnabled,
                         onClick = {
-                            if (checkInternet(context)) onModeSelected(GameMode.EASY)
-                            else showNoInternetDialog = true
+                            // ✅ Vérification internet UNIQUEMENT ici, au moment du clic
+                            if (NetworkChecker.isInternetAvailable(context)) {
+                                onModeSelected(GameMode.EASY)
+                            } else {
+                                showNoInternetDialog = true
+                            }
                         }
                     )
 
@@ -197,8 +189,11 @@ fun ModeSelectScreen(
                         gradient = listOf(Color(0xFFFF9800), Color(0xFFFFB74D)),
                         enabled = cardsEnabled,
                         onClick = {
-                            if (checkInternet(context)) onModeSelected(GameMode.MEDIUM)
-                            else showNoInternetDialog = true
+                            if (NetworkChecker.isInternetAvailable(context)) {
+                                onModeSelected(GameMode.MEDIUM)
+                            } else {
+                                showNoInternetDialog = true
+                            }
                         }
                     )
 
@@ -209,8 +204,11 @@ fun ModeSelectScreen(
                         gradient = listOf(Color(0xFFF44336), Color(0xFFE91E63)),
                         enabled = cardsEnabled,
                         onClick = {
-                            if (checkInternet(context)) onModeSelected(GameMode.HARD)
-                            else showNoInternetDialog = true
+                            if (NetworkChecker.isInternetAvailable(context)) {
+                                onModeSelected(GameMode.HARD)
+                            } else {
+                                showNoInternetDialog = true
+                            }
                         }
                     )
                 }
