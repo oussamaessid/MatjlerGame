@@ -24,7 +24,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -44,20 +43,19 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import app.matjlergame.ads.AdManager
 import app.matjlergame.domain.model.GameMode
-import app.matjlergame.utils.NetworkChecker
 import com.google.android.gms.ads.AdRequest
 import com.google.android.gms.ads.AdSize
 import com.google.android.gms.ads.AdView
 
-// ✅ SUPPRIMÉ : plus de fonction checkInternet locale ici.
-// La vérification se fait uniquement via NetworkChecker au moment du clic.
+// ✅ AUCUNE vérification internet ici.
+// AUCUN dialog internet ici.
+// La vérification se fait UNIQUEMENT dans MainActivity → onModeSelected.
 
 @Composable
 fun ModeSelectScreen(
@@ -66,21 +64,8 @@ fun ModeSelectScreen(
     onModeSelected: (GameMode) -> Unit,
     onHowToPlayClicked: () -> Unit = {}
 ) {
-    val context = LocalContext.current
-
-    // ✅ Le dialog n'est affiché QUE si l'utilisateur clique sur un mode sans connexion.
-    // Il n'est JAMAIS déclenché automatiquement à l'ouverture de l'écran.
-    var showNoInternetDialog by remember { mutableStateOf(false) }
-
-    if (showNoInternetDialog) {
-        NoInternetDialog(
-            onDismiss = { showNoInternetDialog = false },
-            onRetry = {
-                showNoInternetDialog = false
-                // L'utilisateur devra re-cliquer sur le mode souhaité
-            }
-        )
-    }
+    // ✅ SUPPRIMÉ : showNoInternetDialog local — c'était la cause du bug
+    // Le dialog internet est géré uniquement dans MainActivity
 
     Box(
         modifier = Modifier
@@ -96,7 +81,7 @@ fun ModeSelectScreen(
             verticalArrangement = Arrangement.SpaceBetween
         ) {
 
-            // ── Header ──────────────────────────────────────────────────────
+            // ── Header ──────────────────────────────────────────────
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -113,16 +98,17 @@ fun ModeSelectScreen(
                         .background(Color.White.copy(alpha = 0.3f))
                 ) {
                     Icon(
-                        imageVector = Icons.Filled.Info,
+                        imageVector        = Icons.Filled.Info,
                         contentDescription = "Comment jouer",
-                        tint = Color.White,
-                        modifier = Modifier.size(28.dp)
+                        tint               = Color.White,
+                        modifier           = Modifier.size(28.dp)
                     )
                 }
             }
 
+            // ── Contenu central ─────────────────────────────────────
             Box(
-                modifier = Modifier
+                modifier         = Modifier
                     .weight(1f)
                     .fillMaxWidth(),
                 contentAlignment = Alignment.Center
@@ -130,14 +116,14 @@ fun ModeSelectScreen(
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(32.dp),
-                    modifier = Modifier.padding(24.dp)
+                    modifier            = Modifier.padding(24.dp)
                 ) {
                     val infiniteTransition = rememberInfiniteTransition(label = "title")
                     val titleScale by infiniteTransition.animateFloat(
                         initialValue = 1f,
-                        targetValue = 1.05f,
+                        targetValue  = 1.05f,
                         animationSpec = infiniteRepeatable(
-                            animation = tween(1000, easing = FastOutSlowInEasing),
+                            animation  = tween(1000, easing = FastOutSlowInEasing),
                             repeatMode = RepeatMode.Reverse
                         ),
                         label = "titleScale"
@@ -145,20 +131,20 @@ fun ModeSelectScreen(
 
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier.scale(titleScale)
+                        modifier            = Modifier.scale(titleScale)
                     ) {
                         Text(
-                            text = "🎯 Equal To",
-                            fontSize = 48.sp,
-                            fontWeight = FontWeight.Black,
-                            color = Color.White,
+                            text          = "🎯 Equal To",
+                            fontSize      = 48.sp,
+                            fontWeight    = FontWeight.Black,
+                            color         = Color.White,
                             letterSpacing = 2.sp
                         )
                         Text(
-                            text = "Math Puzzle Game",
-                            fontSize = 18.sp,
+                            text       = "Math Puzzle Game",
+                            fontSize   = 18.sp,
                             fontWeight = FontWeight.Medium,
-                            color = Color.White.copy(alpha = 0.9f)
+                            color      = Color.White.copy(alpha = 0.9f)
                         )
                     }
 
@@ -166,74 +152,65 @@ fun ModeSelectScreen(
 
                     val cardsEnabled = !isLoading
 
+                    // ✅ Les cards appellent directement onModeSelected
+                    // La vérification internet est dans MainActivity, pas ici
                     ModeCard(
-                        title = "FACILE",
-                        emoji = "🌱",
+                        title       = "FACILE",
+                        emoji       = "🌱",
                         description = "Pour débuter",
-                        gradient = listOf(Color(0xFF4CAF50), Color(0xFF8BC34A)),
-                        enabled = cardsEnabled,
-                        onClick = {
-                            // ✅ Vérification internet UNIQUEMENT ici, au moment du clic
-                            if (NetworkChecker.isInternetAvailable(context)) {
-                                onModeSelected(GameMode.EASY)
-                            } else {
-                                showNoInternetDialog = true
-                            }
-                        }
+                        gradient    = listOf(Color(0xFF4CAF50), Color(0xFF8BC34A)),
+                        enabled     = cardsEnabled,
+                        onClick     = { onModeSelected(GameMode.EASY) }
                     )
 
                     ModeCard(
-                        title = "MOYEN",
-                        emoji = "⚡",
+                        title       = "MOYEN",
+                        emoji       = "⚡",
                         description = "Un peu plus dur",
-                        gradient = listOf(Color(0xFFFF9800), Color(0xFFFFB74D)),
-                        enabled = cardsEnabled,
-                        onClick = {
-                            if (NetworkChecker.isInternetAvailable(context)) {
-                                onModeSelected(GameMode.MEDIUM)
-                            } else {
-                                showNoInternetDialog = true
-                            }
-                        }
+                        gradient    = listOf(Color(0xFFFF9800), Color(0xFFFFB74D)),
+                        enabled     = cardsEnabled,
+                        onClick     = { onModeSelected(GameMode.MEDIUM) }
                     )
 
                     ModeCard(
-                        title = "DIFFICILE",
-                        emoji = "🔥",
+                        title       = "DIFFICILE",
+                        emoji       = "🔥",
                         description = "Expert seulement",
-                        gradient = listOf(Color(0xFFF44336), Color(0xFFE91E63)),
-                        enabled = cardsEnabled,
-                        onClick = {
-                            if (NetworkChecker.isInternetAvailable(context)) {
-                                onModeSelected(GameMode.HARD)
-                            } else {
-                                showNoInternetDialog = true
-                            }
-                        }
+                        gradient    = listOf(Color(0xFFF44336), Color(0xFFE91E63)),
+                        enabled     = cardsEnabled,
+                        onClick     = { onModeSelected(GameMode.HARD) }
                     )
                 }
             }
 
-            // ── Bannière pub ─────────────────────────────────────────────────
-            AndroidView(
-                modifier = Modifier
+            // ── Bannière pub ─────────────────────────────────────────
+            Box(
+                modifier         = Modifier
                     .fillMaxWidth()
-                    .wrapContentHeight()
-                    .padding(bottom = 8.dp)
-                    .navigationBarsPadding(),
-                factory = { ctx ->
-                    AdView(ctx).apply {
-                        setAdSize(AdSize.BANNER)
-                        adUnitId = AdManager.BANNER_MODE_SELECT_AD_UNIT_ID
-                        loadAd(AdRequest.Builder().build())
-                    }
-                }
-            )
+                    .background(Color.Transparent)
+                    .navigationBarsPadding()
+                    .padding(bottom = 4.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                AndroidView(
+                    factory = { ctx ->
+                        AdView(ctx).apply {
+                            adUnitId = AdManager.BANNER_MODE_SELECT_AD_UNIT_ID
+                            setAdSize(AdSize.BANNER)
+                            loadAd(AdRequest.Builder().build())
+                        }
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(50.dp)
+                )
+            }
         }
 
+        // ── Overlay chargement ───────────────────────────────────────
         if (isLoading) {
             Box(
-                modifier = Modifier
+                modifier         = Modifier
                     .fillMaxSize()
                     .background(Color.Black.copy(alpha = 0.5f)),
                 contentAlignment = Alignment.Center
@@ -243,15 +220,15 @@ fun ModeSelectScreen(
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
                     CircularProgressIndicator(
-                        modifier = Modifier.size(64.dp),
-                        color = Color.White,
+                        modifier    = Modifier.size(64.dp),
+                        color       = Color.White,
                         strokeWidth = 6.dp
                     )
                     Text(
-                        text = "Chargement...",
-                        fontSize = 18.sp,
+                        text       = "Chargement...",
+                        fontSize   = 18.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color.White
+                        color      = Color.White
                     )
                 }
             }
@@ -261,18 +238,18 @@ fun ModeSelectScreen(
 
 @Composable
 private fun ModeCard(
-    title: String,
-    emoji: String,
-    description: String,
-    gradient: List<Color>,
-    enabled: Boolean = true,
-    onClick: () -> Unit
+    title       : String,
+    emoji       : String,
+    description : String,
+    gradient    : List<Color>,
+    enabled     : Boolean = true,
+    onClick     : () -> Unit
 ) {
     var isPressed by remember { mutableStateOf(false) }
     val scale by animateFloatAsState(
-        targetValue = if (isPressed) 0.95f else 1f,
+        targetValue   = if (isPressed) 0.95f else 1f,
         animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
-        label = "cardScale"
+        label         = "cardScale"
     )
 
     Box(
@@ -286,10 +263,7 @@ private fun ModeCard(
                     Brush.horizontalGradient(gradient)
                 } else {
                     Brush.horizontalGradient(
-                        listOf(
-                            gradient[0].copy(alpha = 0.5f),
-                            gradient[1].copy(alpha = 0.5f)
-                        )
+                        listOf(gradient[0].copy(alpha = 0.5f), gradient[1].copy(alpha = 0.5f))
                     )
                 }
             )
@@ -301,25 +275,25 @@ private fun ModeCard(
         contentAlignment = Alignment.CenterStart
     ) {
         Row(
-            verticalAlignment = Alignment.CenterVertically,
+            verticalAlignment     = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             Text(
-                text = emoji,
+                text     = emoji,
                 fontSize = 40.sp,
                 modifier = Modifier.scale(if (enabled) 1f else 0.8f)
             )
             Column {
                 Text(
-                    text = title,
-                    fontSize = 24.sp,
+                    text       = title,
+                    fontSize   = 24.sp,
                     fontWeight = FontWeight.Bold,
-                    color = Color.White.copy(alpha = if (enabled) 1f else 0.6f)
+                    color      = Color.White.copy(alpha = if (enabled) 1f else 0.6f)
                 )
                 Text(
-                    text = description,
+                    text     = description,
                     fontSize = 14.sp,
-                    color = Color.White.copy(alpha = if (enabled) 0.9f else 0.5f)
+                    color    = Color.White.copy(alpha = if (enabled) 0.9f else 0.5f)
                 )
             }
         }

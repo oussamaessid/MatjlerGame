@@ -36,127 +36,109 @@ class GameViewModel(
     var gameState by mutableStateOf(loadGameState())
         private set
 
+    // null = pas de dialog
+    // 5   = proposer vidéo pour ligne 5
+    // 6   = proposer vidéo pour ligne 6
+    var pendingExtraRow by mutableStateOf<Int?>(null)
+        private set
+
+    // ─────────────────────────────────────────────────────────────
+    // INIT
+    // ─────────────────────────────────────────────────────────────
+
     private fun loadGameState(): GameState {
-        if (sharedPreferences == null) {
-            return createInitialGameState()
-        }
-
+        if (sharedPreferences == null) return createInitialGameState()
         val savedJson = sharedPreferences.getString(gameStateKey, null)
-
         return if (savedJson != null) {
-            try {
-                parseGameStateFromJson(savedJson)
-            } catch (e: Exception) {
-                createInitialGameState()
-            }
+            try { parseGameStateFromJson(savedJson) } catch (e: Exception) { createInitialGameState() }
         } else {
             createInitialGameState()
         }
     }
 
+    // ✅ 4 lignes au départ
     private fun createInitialGameState(): GameState {
         return GameState(
-            guesses = List(5) { List(level.slots) { "" } },  // 5 lignes au début
-            tileStatuses = List(5) { List(level.slots) { TileStatus.EMPTY } }  // 5 lignes au début
+            guesses      = List(4) { List(level.slots) { "" } },
+            tileStatuses = List(4) { List(level.slots) { TileStatus.EMPTY } }
         )
     }
 
     private fun parseGameStateFromJson(json: String): GameState {
-        val jsonObject = JSONObject(json)
-
-        val guessesArray = jsonObject.getJSONArray("guesses")
-        val guesses = mutableListOf<List<String>>()
+        val obj          = JSONObject(json)
+        val guessesArray = obj.getJSONArray("guesses")
+        val guesses      = mutableListOf<List<String>>()
         for (i in 0 until guessesArray.length()) {
-            val rowArray = guessesArray.getJSONArray(i)
-            val row = mutableListOf<String>()
-            for (j in 0 until rowArray.length()) {
-                row.add(rowArray.getString(j))
-            }
+            val rowArr = guessesArray.getJSONArray(i)
+            val row    = mutableListOf<String>()
+            for (j in 0 until rowArr.length()) row.add(rowArr.getString(j))
             guesses.add(row)
         }
-
-        val statusesArray = jsonObject.getJSONArray("tileStatuses")
-        val tileStatuses = mutableListOf<List<TileStatus>>()
+        val statusesArray = obj.getJSONArray("tileStatuses")
+        val tileStatuses  = mutableListOf<List<TileStatus>>()
         for (i in 0 until statusesArray.length()) {
-            val rowArray = statusesArray.getJSONArray(i)
-            val row = mutableListOf<TileStatus>()
-            for (j in 0 until rowArray.length()) {
-                row.add(TileStatus.valueOf(rowArray.getString(j)))
-            }
+            val rowArr = statusesArray.getJSONArray(i)
+            val row    = mutableListOf<TileStatus>()
+            for (j in 0 until rowArr.length()) row.add(TileStatus.valueOf(rowArr.getString(j)))
             tileStatuses.add(row)
         }
-
         return GameState(
-            guesses = guesses,
+            guesses      = guesses,
             tileStatuses = tileStatuses,
-            currentGuess = jsonObject.getInt("currentGuess"),
-            currentPos = jsonObject.getInt("currentPos"),
-            gameOver = jsonObject.getBoolean("gameOver"),
-            isWon = jsonObject.getBoolean("isWon"),
-            message = jsonObject.getString("message"),
-            isShaking = false
+            currentGuess = obj.getInt("currentGuess"),
+            currentPos   = obj.getInt("currentPos"),
+            gameOver     = obj.getBoolean("gameOver"),
+            isWon        = obj.getBoolean("isWon"),
+            message      = obj.getString("message"),
+            isShaking    = false
         )
     }
 
     private fun saveGameState() {
         if (sharedPreferences == null) return
-
-        val jsonObject = JSONObject()
-
+        val obj          = JSONObject()
         val guessesArray = JSONArray()
         for (row in gameState.guesses) {
-            val rowArray = JSONArray()
-            for (cell in row) {
-                rowArray.put(cell)
-            }
-            guessesArray.put(rowArray)
+            val rowArr = JSONArray(); for (cell in row) rowArr.put(cell); guessesArray.put(rowArr)
         }
-        jsonObject.put("guesses", guessesArray)
-
+        obj.put("guesses", guessesArray)
         val statusesArray = JSONArray()
         for (row in gameState.tileStatuses) {
-            val rowArray = JSONArray()
-            for (status in row) {
-                rowArray.put(status.name)
-            }
-            statusesArray.put(rowArray)
+            val rowArr = JSONArray(); for (s in row) rowArr.put(s.name); statusesArray.put(rowArr)
         }
-        jsonObject.put("tileStatuses", statusesArray)
-
-        jsonObject.put("currentGuess", gameState.currentGuess)
-        jsonObject.put("currentPos", gameState.currentPos)
-        jsonObject.put("gameOver", gameState.gameOver)
-        jsonObject.put("isWon", gameState.isWon)
-        jsonObject.put("message", gameState.message)
-
-        sharedPreferences.edit().putString(gameStateKey, jsonObject.toString()).apply()
+        obj.put("tileStatuses", statusesArray)
+        obj.put("currentGuess", gameState.currentGuess)
+        obj.put("currentPos",   gameState.currentPos)
+        obj.put("gameOver",     gameState.gameOver)
+        obj.put("isWon",        gameState.isWon)
+        obj.put("message",      gameState.message)
+        sharedPreferences.edit().putString(gameStateKey, obj.toString()).apply()
     }
 
     private fun clearSavedState() {
         sharedPreferences?.edit()?.remove(gameStateKey)?.apply()
     }
 
+    // ─────────────────────────────────────────────────────────────
+    // CLAVIER
+    // ─────────────────────────────────────────────────────────────
+
     fun handleKeyPress(key: String) {
         if (gameState.gameOver) return
-
         when (key) {
-            "ENTER" -> submitGuess()
+            "ENTER"  -> submitGuess()
             "DELETE" -> deleteLastChar()
-            else -> addChar(key)
+            else     -> addChar(key)
         }
     }
 
     private fun addChar(char: String) {
         if (gameState.currentPos < level.slots && "0123456789+-*/()".contains(char)) {
-            val newGuesses = gameState.guesses.toMutableList()
-            val currentRow = newGuesses[gameState.currentGuess].toMutableList()
+            val newGuesses  = gameState.guesses.toMutableList()
+            val currentRow  = newGuesses[gameState.currentGuess].toMutableList()
             currentRow[gameState.currentPos] = char
             newGuesses[gameState.currentGuess] = currentRow
-
-            gameState = gameState.copy(
-                guesses = newGuesses,
-                currentPos = gameState.currentPos + 1
-            )
+            gameState = gameState.copy(guesses = newGuesses, currentPos = gameState.currentPos + 1)
             saveGameState()
         }
     }
@@ -167,11 +149,7 @@ class GameViewModel(
             val currentRow = newGuesses[gameState.currentGuess].toMutableList()
             currentRow[gameState.currentPos - 1] = ""
             newGuesses[gameState.currentGuess] = currentRow
-
-            gameState = gameState.copy(
-                guesses = newGuesses,
-                currentPos = gameState.currentPos - 1
-            )
+            gameState = gameState.copy(guesses = newGuesses, currentPos = gameState.currentPos - 1)
             saveGameState()
         }
     }
@@ -182,31 +160,32 @@ class GameViewModel(
             shakeRow()
             return
         }
-
         val guessStr = gameState.guesses[gameState.currentGuess].joinToString("")
-
         if (!validateExpressionUseCase(guessStr, level.target)) {
             showMessage("Calcul invalide ou ≠ ${level.target}")
             shakeRow()
             return
         }
-
         revealColors(guessStr)
     }
 
+    // ─────────────────────────────────────────────────────────────
+    // RÉVÉLATION COULEURS + LOGIQUE FIN DE PARTIE
+    // ─────────────────────────────────────────────────────────────
+
     private fun revealColors(guessStr: String) {
-        val statuses = calculateTileStatusesUseCase(guessStr, level.solution, level.slots)
+        val statuses   = calculateTileStatusesUseCase(guessStr, level.solution, level.slots)
+        val currentRow = gameState.currentGuess
 
         viewModelScope.launch {
-            val currentRow = gameState.currentGuess
-
+            // Révéler tuile par tuile
             for (i in 0 until level.slots) {
                 delay(150)
-                val newTileStatuses = gameState.tileStatuses.toMutableList()
-                val rowStatuses = newTileStatuses[currentRow].toMutableList()
-                rowStatuses[i] = statuses[i]
-                newTileStatuses[currentRow] = rowStatuses
-                gameState = gameState.copy(tileStatuses = newTileStatuses)
+                val newStatuses = gameState.tileStatuses.toMutableList()
+                val rowStatuses = newStatuses[currentRow].toMutableList()
+                rowStatuses[i]  = statuses[i]
+                newStatuses[currentRow] = rowStatuses
+                gameState = gameState.copy(tileStatuses = newStatuses)
                 saveGameState()
             }
 
@@ -215,36 +194,50 @@ class GameViewModel(
             val attempts = gameState.currentGuess + 1
 
             when {
+                // ✅ VICTOIRE — sur n'importe quelle ligne
                 guessStr == level.solution -> {
-                    val message = if (attempts == 6) {
-                        "🎉 Bravo! Niveau réussi avec aide vidéo!\n\nRevenez demain pour un nouveau défi 🌟"
-                    } else {
-                        // Victoire sur les lignes 1-5
-                        "🎉 Bravo! Niveau réussi en $attempts essais!\n\nRevenez demain pour un nouveau défi 🌟"
+                    val msg = when (attempts) {
+                        in 1..4 -> "🎉 Bravo! Résolu en $attempts essais!\n\nRevenez demain pour un nouveau défi 🌟"
+                        5       -> "🎉 Bravo! Résolu avec 1 aide vidéo!\n\nRevenez demain pour un nouveau défi 🌟"
+                        6       -> "🎉 Bravo! Résolu avec 2 aides vidéo!\n\nRevenez demain pour un nouveau défi 🌟"
+                        else    -> "🎉 Bravo! Résolu en $attempts essais!"
                     }
-                    showMessage(message, permanent = true)
+                    showMessage(msg, permanent = true)
                     gameState = gameState.copy(gameOver = true, isWon = true)
                     saveGameState()
-
                     delay(2000)
                     clearSavedState()
                     onLevelCompleted(true, attempts)
                 }
 
-                gameState.currentGuess == 4 -> {  // Index 4 = 5ème ligne (dernière ligne normale)
-                    // NE PAS quitter automatiquement
-                    // Le dialogue RewardedAdChoiceDialog va s'afficher
+                // ✅ Échec ligne 4 (index 3) → proposer vidéo pour ligne 5
+                gameState.currentGuess == 3 -> {
                     gameState = gameState.copy(gameOver = true, isWon = false)
                     saveGameState()
+                    pendingExtraRow = 5
+                }
 
-                    // PAS de delay ni onLevelCompleted ici
-                    // L'utilisateur décidera via le dialogue
+                // ✅ Échec ligne 5 (index 4) → proposer vidéo pour ligne 6
+                gameState.currentGuess == 4 -> {
+                    gameState = gameState.copy(gameOver = true, isWon = false)
+                    saveGameState()
+                    pendingExtraRow = 6
+                }
+
+                // ✅ Échec ligne 6 (index 5) → perdu définitivement
+                gameState.currentGuess == 5 -> {
+                    showMessage("😔 Perdu ! La solution était : ${level.solution}", permanent = true)
+                    gameState = gameState.copy(gameOver = true, isWon = false)
+                    saveGameState()
+                    delay(2000)
+                    clearSavedState()
+                    onLevelCompleted(false, 6)
                 }
 
                 else -> {
                     gameState = gameState.copy(
                         currentGuess = gameState.currentGuess + 1,
-                        currentPos = 0
+                        currentPos   = 0
                     )
                     saveGameState()
                 }
@@ -252,88 +245,52 @@ class GameViewModel(
         }
     }
 
+    // ─────────────────────────────────────────────────────────────
+    // ACTIONS PUBLIQUES
+    // ─────────────────────────────────────────────────────────────
+
+    /**
+     * ✅ Appelé par GameScreen juste avant de lancer la pub
+     * pour fermer le dialog immédiatement
+     */
+    fun clearPendingExtraRow() {
+        pendingExtraRow = null
+    }
+
+    /**
+     * ✅ Appelé après que l'utilisateur a regardé la pub jusqu'au bout.
+     * Ajoute une ligne bonus et remet le jeu en marche.
+     */
     fun addExtraTry() {
-        if (gameState.gameOver && !gameState.isWon) {
-
-            // AJOUTER une 6ème ligne vide
-            val newGuesses = gameState.guesses.toMutableList()
-            newGuesses.add(List(level.slots) { "" })
-
-            val newTileStatuses = gameState.tileStatuses.toMutableList()
-            newTileStatuses.add(List(level.slots) { TileStatus.EMPTY })
-
-            gameState = gameState.copy(
-                guesses = newGuesses,
-                tileStatuses = newTileStatuses,
-                currentGuess = 5,
-                currentPos = 0,
-                gameOver = false,
-                message = ""
-            )
-
-            saveGameState()
-        }
+        val newGuesses      = gameState.guesses.toMutableList()
+        val newTileStatuses = gameState.tileStatuses.toMutableList()
+        newGuesses.add(List(level.slots) { "" })
+        newTileStatuses.add(List(level.slots) { TileStatus.EMPTY })
+        val newRow = newGuesses.size - 1
+        gameState = gameState.copy(
+            guesses      = newGuesses,
+            tileStatuses = newTileStatuses,
+            currentGuess = newRow,
+            currentPos   = 0,
+            gameOver     = false,
+            message      = ""
+        )
+        pendingExtraRow = null
+        saveGameState()
     }
 
-
-    fun revealSolution() {
-        if (gameState.gameOver && !gameState.isWon) {
-            val solution = level.solution
-            val solutionChars = solution.toList().map { it.toString() }
-
-            viewModelScope.launch {
-                // AJOUTER une 6ème ligne avec la solution
-                val newGuesses = gameState.guesses.toMutableList()
-                newGuesses.add(solutionChars)  // Ajouter ligne 6 avec la solution
-
-                val newTileStatuses = gameState.tileStatuses.toMutableList()
-                newTileStatuses.add(List(level.slots) { TileStatus.EMPTY })  // Ajouter ligne 6
-
-                gameState = gameState.copy(
-                    guesses = newGuesses,
-                    tileStatuses = newTileStatuses,
-                    currentGuess = 5,  // Index 5 = 6ème ligne
-                    currentPos = level.slots,
-                    gameOver = false
-                )
-                saveGameState()
-
-                val statuses = calculateTileStatusesUseCase(solution, level.solution, level.slots)
-
-                for (i in 0 until level.slots) {
-                    delay(150)
-                    val updatedTileStatuses = gameState.tileStatuses.toMutableList()
-                    val rowStatuses = updatedTileStatuses[5].toMutableList()  // Ligne 6
-                    rowStatuses[i] = statuses[i]
-                    updatedTileStatuses[5] = rowStatuses
-                    gameState = gameState.copy(tileStatuses = updatedTileStatuses)
-                    saveGameState()
-                }
-
-                delay(300)
-
-                // Ligne 6 = attempts = 6
-                val attempts = 6
-                val message = "🎉 Bravo! Niveau réussi avec aide vidéo!\n\nRevenez demain pour un nouveau défi 🌟"
-                showMessage(message, permanent = true)
-                gameState = gameState.copy(gameOver = true, isWon = true)
-                saveGameState()
-
-                delay(2000)
-                clearSavedState()
-                onLevelCompleted(true, attempts)
-            }
-        }
-    }
-
+    /**
+     * ✅ Appelé quand :
+     * - l'utilisateur clique "Non merci"
+     * - la pub n'est pas disponible
+     * - la pub se ferme sans récompense
+     */
     fun finishGameAsLost() {
-        if (gameState.gameOver && !gameState.isWon) {
-            // Perdu = 5 tentatives échouées
-            val attempts = 5
-            viewModelScope.launch {
-                clearSavedState()
-                onLevelCompleted(false, attempts)
-            }
+        pendingExtraRow = null
+        val attempts = gameState.currentGuess + 1
+        viewModelScope.launch {
+            clearSavedState()
+            onLevelCompleted(false, attempts)
         }
     }
 
