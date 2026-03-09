@@ -22,11 +22,10 @@ class AdManager(private val context: Context) {
     private var interstitialExtraTry: InterstitialAd? = null
     private var interstitialSolution: InterstitialAd? = null
 
-    // ✅ Interstitiel périodique dédié (toutes les 4 min pendant le jeu)
     private var interstitialPeriodic: InterstitialAd? = null
     private var isLoadingInterstitialPeriodic = false
     private var lastPeriodicAdShownTime: Long = 0L
-    private val periodicAdIntervalMs = 4 * 60 * 1000L // 4 minutes
+    private val periodicAdIntervalMs = 4 * 60 * 1000L
 
     private var isLoadingAppOpen = false
     private var isLoadingRewardedExtraTry = false
@@ -94,10 +93,6 @@ class AdManager(private val context: Context) {
         }
     }
 
-    // ─────────────────────────────────────────────────────────────
-    // APP OPEN
-    // ─────────────────────────────────────────────────────────────
-
     fun loadAppOpenAd(onAdLoaded: () -> Unit = {}) {
         if (isLoadingAppOpen || appOpenLoadFailed) return
         isLoadingAppOpen = true
@@ -159,10 +154,6 @@ class AdManager(private val context: Context) {
             onAdDismissed()
         }
     }
-
-    // ─────────────────────────────────────────────────────────────
-    // REWARDED — EXTRA TRY
-    // ─────────────────────────────────────────────────────────────
 
     fun loadRewardedAdExtraTry(onAdLoaded: () -> Unit = {}) {
         if (isLoadingRewardedExtraTry || extraTryLoadFailed) return
