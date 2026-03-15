@@ -31,22 +31,21 @@ class NavigationViewModel(private val sharedPreferences: SharedPreferences) : Vi
         val isFirstLaunch = sharedPreferences.getBoolean(KEY_IS_FIRST_LAUNCH, true)
 
         if (isFirstLaunch) {
-            // Marquer comme déjà lancé
             sharedPreferences.edit().putBoolean(KEY_IS_FIRST_LAUNCH, false).apply()
             return Screen.HOW_TO_PLAY
         }
 
-        // Si ce n'est pas la première fois, charger l'écran sauvegardé
         return loadScreen()
     }
 
     private fun loadScreen(): Screen {
         val screenName = sharedPreferences.getString(KEY_CURRENT_SCREEN, Screen.MODE_SELECT.name)
-        return try {
+        val screen = try {
             Screen.valueOf(screenName ?: Screen.MODE_SELECT.name)
         } catch (e: Exception) {
             Screen.MODE_SELECT
         }
+        return if (screen == Screen.GAME) Screen.MODE_SELECT else screen
     }
 
     private fun loadMode(): GameMode? {

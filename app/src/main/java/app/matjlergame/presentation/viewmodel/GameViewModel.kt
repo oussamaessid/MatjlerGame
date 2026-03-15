@@ -169,16 +169,12 @@ class GameViewModel(
         revealColors(guessStr)
     }
 
-    // ─────────────────────────────────────────────────────────────
-    // RÉVÉLATION COULEURS + LOGIQUE FIN DE PARTIE
-    // ─────────────────────────────────────────────────────────────
 
     private fun revealColors(guessStr: String) {
         val statuses   = calculateTileStatusesUseCase(guessStr, level.solution, level.slots)
         val currentRow = gameState.currentGuess
 
         viewModelScope.launch {
-            // Révéler tuile par tuile
             for (i in 0 until level.slots) {
                 delay(150)
                 val newStatuses = gameState.tileStatuses.toMutableList()
@@ -194,7 +190,6 @@ class GameViewModel(
             val attempts = gameState.currentGuess + 1
 
             when {
-                // ✅ VICTOIRE — sur n'importe quelle ligne
                 guessStr == level.solution -> {
                     val msg = when (attempts) {
                         in 1..4 -> "🎉 Bravo! Résolu en $attempts essais!\n\nRevenez demain pour un nouveau défi 🌟"
@@ -210,21 +205,21 @@ class GameViewModel(
                     onLevelCompleted(true, attempts)
                 }
 
-                // ✅ Échec ligne 4 (index 3) → proposer vidéo pour ligne 5
+                //  Échec ligne 4 (index 3) → proposer vidéo pour ligne 5
                 gameState.currentGuess == 3 -> {
                     gameState = gameState.copy(gameOver = true, isWon = false)
                     saveGameState()
                     pendingExtraRow = 5
                 }
 
-                // ✅ Échec ligne 5 (index 4) → proposer vidéo pour ligne 6
+                //  Échec ligne 5 (index 4) → proposer vidéo pour ligne 6
                 gameState.currentGuess == 4 -> {
                     gameState = gameState.copy(gameOver = true, isWon = false)
                     saveGameState()
                     pendingExtraRow = 6
                 }
 
-                // ✅ Échec ligne 6 (index 5) → perdu définitivement
+                //  Échec ligne 6 (index 5) → perdu définitivement
                 gameState.currentGuess == 5 -> {
                     showMessage("😔 Perdu ! La solution était : ${level.solution}", permanent = true)
                     gameState = gameState.copy(gameOver = true, isWon = false)
@@ -245,22 +240,10 @@ class GameViewModel(
         }
     }
 
-    // ─────────────────────────────────────────────────────────────
-    // ACTIONS PUBLIQUES
-    // ─────────────────────────────────────────────────────────────
-
-    /**
-     * ✅ Appelé par GameScreen juste avant de lancer la pub
-     * pour fermer le dialog immédiatement
-     */
     fun clearPendingExtraRow() {
         pendingExtraRow = null
     }
 
-    /**
-     * ✅ Appelé après que l'utilisateur a regardé la pub jusqu'au bout.
-     * Ajoute une ligne bonus et remet le jeu en marche.
-     */
     fun addExtraTry() {
         val newGuesses      = gameState.guesses.toMutableList()
         val newTileStatuses = gameState.tileStatuses.toMutableList()
@@ -279,12 +262,6 @@ class GameViewModel(
         saveGameState()
     }
 
-    /**
-     * ✅ Appelé quand :
-     * - l'utilisateur clique "Non merci"
-     * - la pub n'est pas disponible
-     * - la pub se ferme sans récompense
-     */
     fun finishGameAsLost() {
         pendingExtraRow = null
         val attempts = gameState.currentGuess + 1
