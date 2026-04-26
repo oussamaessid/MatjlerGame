@@ -51,14 +51,14 @@ class AdManager(private val context: Context) {
         private const val TEST_REWARDED_VIDEO_SOLUTION_ID = "ca-app-pub-3940256099942544/5224354917"
         private const val TEST_INTERSTITIAL_ID = "ca-app-pub-3940256099942544/1033173712"
 
-        private const val PROD_APP_OPEN_ID = "ca-app-pub-4161995857939030/6856571786"
-        private const val PROD_BANNER_MODE_SELECT_ID = "ca-app-pub-4161995857939030/7131903958"
-        private const val PROD_BANNER_GAME_ID = "ca-app-pub-4161995857939030/7494099094"
-        private const val PROD_REWARDED_VIDEO_EXTRA_TRY_ID = "ca-app-pub-4161995857939030/7582944991"
-        private const val PROD_REWARDED_VIDEO_SOLUTION_ID = "ca-app-pub-4161995857939030/2664816346"
+        private const val PROD_APP_OPEN_ID = "ca-app-pub-9651830078758870/2364043726"
+        private const val PROD_BANNER_MODE_SELECT_ID = "ca-app-pub-9651830078758870/8737880386"
+        private const val PROD_BANNER_GAME_ID = "ca-app-pub-9651830078758870/1194432283"
+        private const val PROD_REWARDED_VIDEO_EXTRA_TRY_ID = "ca-app-pub-9651830078758870/1243593238"
+        private const val PROD_REWARDED_VIDEO_SOLUTION_ID = "ca-app-pub-9651830078758870/7041655337"
 
-        private const val PROD_INTERSTITIAL_EXTRA_TRY_ID = "ca-app-pub-2498267529185476/6361352920"
-        private const val PROD_INTERSTITIAL_SOLUTION_ID = "ca-app-pub-2498267529185476/4880859723"
+        private const val PROD_INTERSTITIAL_EXTRA_TRY_ID = "ca-app-pub-9651830078758870/9667818675"
+        private const val PROD_INTERSTITIAL_SOLUTION_ID = "ca-app-pub-9651830078758870/8354737003"
 
         val APP_OPEN_AD_UNIT_ID: String
             get() = if (USE_TEST_ADS) TEST_APP_OPEN_ID else PROD_APP_OPEN_ID

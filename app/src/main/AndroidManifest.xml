@@ -19,7 +19,7 @@
 
         <meta-data
             android:name="com.google.android.gms.ads.APPLICATION_ID"
-            android:value="ca-app-pub-4161995857939030~6225166333"/>
+            android:value="ca-app-pub-9651830078758870~2507513954"/>
 
         <activity
             android:name="app.matjlergame.MainActivity"
