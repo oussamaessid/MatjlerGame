@@ -62,46 +62,64 @@ fun GameScreen(
     val screenHeight  = configuration.screenHeightDp.dp
     val screenWidth   = configuration.screenWidthDp.dp
 
-    // ── Tuiles ──────────────────────────────────────────────────────
-    val tileSpacing  = if (screenWidth < 360.dp) 3.dp else 4.dp
+    // ── CALCUL DYNAMIQUE DE LA TAILLE DES CELLULES ──────────────────
+    // Réserve d'espace pour header, clavier, banner et espacements
+    val headerHeight       = 60.dp
+    val keyboardHeight     = 220.dp
+    val bannerHeight       = 50.dp
+    val totalReservedSpace = headerHeight + keyboardHeight + bannerHeight + 60.dp // + marges/espacements
+
+    // Hauteur disponible pour la grille
+    val availableGridHeight = screenHeight - totalReservedSpace
+
+    // Nombre de lignes dans la grille
+    val gridRows = gameState.guesses.size
+
+    // Calcul de la taille des cellules en fonction de l'espace disponible
+    val tileSpacing  = if (screenWidth < 360.dp) 2.5.dp else 3.5.dp
     val totalSpacing = tileSpacing * (level.slots - 1)
-    var tileSize     = (screenWidth - 32.dp - totalSpacing) / level.slots
-    tileSize = when {
-        screenWidth < 360.dp && level.slots >= 6 -> minOf(tileSize, 34.dp)
-        screenWidth < 380.dp && level.slots >= 6 -> minOf(tileSize, 38.dp)
-        screenWidth < 400.dp                     -> minOf(tileSize, 42.dp)
-        else                                     -> minOf(tileSize, 48.dp)
+
+    // Taille basée sur la LARGEUR
+    var tileSizeFromWidth = (screenWidth - 32.dp - totalSpacing) / level.slots
+    tileSizeFromWidth = when {
+        screenWidth < 360.dp && level.slots >= 6 -> minOf(tileSizeFromWidth, 32.dp)
+        screenWidth < 380.dp && level.slots >= 6 -> minOf(tileSizeFromWidth, 36.dp)
+        screenWidth < 400.dp                     -> minOf(tileSizeFromWidth, 40.dp)
+        else                                     -> minOf(tileSizeFromWidth, 46.dp)
     }
+
+    // Taille basée sur la HAUTEUR (nouveau)
+    val verticalSpacingBetweenRows = tileSpacing * (gridRows - 1)
+    val tileSizeFromHeight = (availableGridHeight - 80.dp - verticalSpacingBetweenRows) / gridRows
+
+    // Prendre la PLUS PETITE des deux pour que tout rentre
+    val tileSize = minOf(tileSizeFromWidth, tileSizeFromHeight)
 
     // ── Clavier ─────────────────────────────────────────────────────
     val keyButtonHeight = when {
-        screenHeight < 580.dp -> 36.dp
-        screenHeight < 680.dp -> 40.dp
-        screenHeight < 780.dp -> 44.dp
-        else                  -> 48.dp
+        screenHeight < 580.dp -> 34.dp
+        screenHeight < 680.dp -> 38.dp
+        screenHeight < 780.dp -> 42.dp
+        else                  -> 46.dp
     }
     val keyRowSpacing = when {
-        screenHeight < 580.dp -> 3.dp
-        screenHeight < 680.dp -> 4.dp
-        else                  -> 5.dp
+        screenHeight < 580.dp -> 2.5.dp
+        screenHeight < 680.dp -> 3.5.dp
+        else                  -> 4.dp
     }
-    val keyColSpacing = if (screenWidth < 360.dp) 3.dp else 5.dp
+    val keyColSpacing = if (screenWidth < 360.dp) 2.5.dp else 4.dp
 
     // ── Textes ──────────────────────────────────────────────────────
-    val headerTextSize    = when { screenWidth < 360.dp -> 11.sp; screenWidth < 400.dp -> 12.sp; else -> 13.sp }
-    val targetTextSize    = when { screenWidth < 360.dp -> 18.sp; screenWidth < 400.dp -> 20.sp; else -> 22.sp }
-    val objectiveTextSize = when { screenWidth < 360.dp -> 12.sp; screenWidth < 400.dp -> 13.sp; else -> 14.sp }
-    val legendTextSize    = when { screenWidth < 360.dp -> 9.sp;  screenWidth < 400.dp -> 10.sp; else -> 11.sp }
-    val keyTextSize       = when { screenWidth < 360.dp -> 16.sp; screenWidth < 400.dp -> 17.sp; else -> 19.sp }
-    val actionKeyTextSize = when { screenWidth < 360.dp -> 13.sp; screenWidth < 400.dp -> 14.sp; else -> 15.sp }
-    val iconSize          = if (screenWidth < 360.dp) 36.dp else 40.dp
-    val headerPadding     = if (screenWidth < 360.dp) 8.dp  else 12.dp
+    val headerTextSize    = when { screenWidth < 360.dp -> 10.sp; screenWidth < 400.dp -> 11.sp; else -> 12.sp }
+    val targetTextSize    = when { screenWidth < 360.dp -> 16.sp; screenWidth < 400.dp -> 18.sp; else -> 20.sp }
+    val objectiveTextSize = when { screenWidth < 360.dp -> 11.sp; screenWidth < 400.dp -> 12.sp; else -> 13.sp }
+    val legendTextSize    = when { screenWidth < 360.dp -> 8.sp;  screenWidth < 400.dp -> 9.sp; else -> 10.sp }
+    val keyTextSize       = when { screenWidth < 360.dp -> 15.sp; screenWidth < 400.dp -> 16.sp; else -> 18.sp }
+    val actionKeyTextSize = when { screenWidth < 360.dp -> 12.sp; screenWidth < 400.dp -> 13.sp; else -> 14.sp }
+    val iconSize          = if (screenWidth < 360.dp) 34.dp else 38.dp
+    val headerPadding     = if (screenWidth < 360.dp) 6.dp  else 10.dp
 
-    val gameSectionGap = when {
-        screenHeight < 580.dp -> 4.dp
-        screenHeight < 680.dp -> 6.dp
-        else                  -> 8.dp
-    }
+    val gameSectionGap = 2.dp
 
     val keyStatuses = remember(gameState.guesses, gameState.tileStatuses) {
         calculateKeyStatuses(gameState.guesses, gameState.tileStatuses, level.slots)
@@ -110,7 +128,7 @@ fun GameScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     val scope             = rememberCoroutineScope()
 
-    // ✅ Interstitiel périodique toutes les 4 minutes
+    // ✅ Interstitiel périodique
     LaunchedEffect(Unit) {
         adManager.loadPeriodicInterstitial()
         while (true) {
@@ -163,23 +181,23 @@ fun GameScreen(
                         imageVector        = Icons.AutoMirrored.Filled.ArrowBack,
                         contentDescription = "Retour",
                         tint               = Color.White,
-                        modifier           = Modifier.size(20.dp)
+                        modifier           = Modifier.size(18.dp)
                     )
                 }
                 Row(
                     verticalAlignment     = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
                     modifier = Modifier
-                        .clip(RoundedCornerShape(10.dp))
+                        .clip(RoundedCornerShape(8.dp))
                         .background(Color.White.copy(alpha = 0.2f))
-                        .padding(horizontal = 14.dp, vertical = 6.dp)
+                        .padding(horizontal = 10.dp, vertical = 4.dp)
                 ) {
                     Text(
                         text          = "CIBLE:",
                         fontSize      = headerTextSize,
                         fontWeight    = FontWeight.Bold,
                         color         = Color.White.copy(alpha = 0.9f),
-                        letterSpacing = 0.5.sp
+                        letterSpacing = 0.3.sp
                     )
                     Text(
                         text       = level.target.toString(),
@@ -194,9 +212,9 @@ fun GameScreen(
                     fontWeight = FontWeight.Medium,
                     color      = Color.White,
                     modifier   = Modifier
-                        .clip(RoundedCornerShape(8.dp))
+                        .clip(RoundedCornerShape(6.dp))
                         .background(Color.White.copy(alpha = 0.2f))
-                        .padding(horizontal = 10.dp, vertical = 6.dp)
+                        .padding(horizontal = 8.dp, vertical = 4.dp)
                 )
             }
 
@@ -206,7 +224,8 @@ fun GameScreen(
             Column(
                 modifier            = Modifier
                     .fillMaxWidth()
-                    .weight(1f),
+                    .weight(1f)
+                    .padding(horizontal = 16.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center
             ) {
@@ -215,28 +234,31 @@ fun GameScreen(
                     fontSize   = objectiveTextSize,
                     fontWeight = FontWeight.Medium,
                     color      = Color(0xFF334155),
-                    textAlign  = TextAlign.Center,
-                    modifier   = Modifier.padding(horizontal = 16.dp)
+                    textAlign  = TextAlign.Center
                 )
                 Spacer(Modifier.height(gameSectionGap))
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(if (screenWidth < 360.dp) 6.dp else 8.dp),
-                    verticalAlignment     = Alignment.CenterVertically
-                ) {
-                    LegendItem(Color(0xFF6AAA64), "✓ Correct",  legendTextSize)
-                    LegendItem(Color(0xFFC9B458), "⚠ Mauvais", legendTextSize)
-                    LegendItem(Color(0xFF787C7E), "✗ Absent",  legendTextSize)
-                }
+                    horizontalArrangement = Arrangement.spacedBy(if (screenWidth < 360.dp) 4.dp else 6.dp),
+                    verticalAlignment     = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .wrapContentWidth()
+                        .align(Alignment.CenterHorizontally),
+                    content = {
+                        LegendItem(Color(0xFF6AAA64), "✓", legendTextSize, modifier = Modifier)
+                        LegendItem(Color(0xFFC9B458), "⚠", legendTextSize, modifier = Modifier)
+                        LegendItem(Color(0xFF787C7E), "✗", legendTextSize, modifier = Modifier)
+                    }
+                )
                 Spacer(Modifier.height(gameSectionGap))
 
-                // Grille
+                // Grille — taille adaptée
                 Column(
                     verticalArrangement = Arrangement.spacedBy(tileSpacing),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     for (row in 0 until gameState.guesses.size) {
                         val offsetX by animateFloatAsState(
-                            targetValue   = if (row == gameState.currentGuess && gameState.isShaking) 10f else 0f,
+                            targetValue   = if (row == gameState.currentGuess && gameState.isShaking) 8f else 0f,
                             animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessHigh),
                             label = "shake"
                         )
@@ -264,7 +286,7 @@ fun GameScreen(
             Column(
                 modifier            = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                    .padding(horizontal = 10.dp, vertical = 6.dp),
                 verticalArrangement = Arrangement.spacedBy(keyRowSpacing)
             ) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(keyColSpacing)) {
@@ -299,12 +321,12 @@ fun GameScreen(
                         onClick = { viewModel.handleKeyPress("+") }, height = keyButtonHeight,
                         textSize = keyTextSize, modifier = Modifier.weight(1f))
                 }
-                // ✅ VALIDER — Box direct, toujours visible
+                // ✅ VALIDER
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(keyButtonHeight)
-                        .clip(RoundedCornerShape(8.dp))
+                        .clip(RoundedCornerShape(6.dp))
                         .background(Color(0xFFDCFCE7))
                         .clickable { viewModel.handleKeyPress("ENTER") },
                     contentAlignment = Alignment.Center
@@ -320,14 +342,14 @@ fun GameScreen(
             }
 
             // ════════════════
-            // BANNER — fixe en bas, toujours visible
+            // BANNER
             // ════════════════
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .background(Color.White)
                     .navigationBarsPadding()
-                    .padding(bottom = 4.dp),
+                    .padding(bottom = 2.dp),
                 contentAlignment = Alignment.Center
             ) {
                 AndroidView(
@@ -358,13 +380,13 @@ fun GameScreen(
                     else               -> Color(0xFFFF9800)
                 },
                 contentColor = Color.White,
-                shape        = RoundedCornerShape(12.dp),
+                shape        = RoundedCornerShape(10.dp),
                 modifier     = Modifier.padding(16.dp)
             )
         }
 
         // ════════════════
-        // DIALOG VIDÉO — ligne 5 (1ère aide)
+        // DIALOGS VIDÉO
         // ════════════════
         if (pendingExtraRow == 5) {
             val adAvailable = adManager.isRewardedAdExtraTryAvailable()
@@ -372,58 +394,39 @@ fun GameScreen(
                 rowNumber     = 5,
                 isAdAvailable = adAvailable,
                 onWatchAd     = {
-                    // ✅ Ferme le dialog
                     viewModel.clearPendingExtraRow()
                     if (adAvailable) {
                         adManager.showRewardedAdExtraTry(
                             activity      = context as Activity,
-                            onRewarded    = {
-                                // Pub vue jusqu'au bout → ligne bonus débloquée
-                                viewModel.addExtraTry()
-                            },
-                            onAdDismissed = {
-                                // Pub fermée SANS récompense → perdu
-                                // (si onRewarded a déjà été appelé, addExtraTry a déjà agi)
-                            }
-                        )
-                    } else {
-                        // Pas de pub disponible → perdu
-                        viewModel.finishGameAsLost()
-                    }
-                },
-                onDismiss     = {
-                    // Utilisateur a cliqué "Non merci" → perdu
-                    viewModel.finishGameAsLost()
-                }
-            )
-        }
-
-        // ════════════════
-        // DIALOG VIDÉO — ligne 6 (2ème aide)
-        // ════════════════
-        if (pendingExtraRow == 6) {
-            val adAvailable = adManager.isRewardedAdSolutionAvailable()
-            ExtraRowAdDialog(
-                rowNumber     = 6,
-                isAdAvailable = adAvailable,
-                onWatchAd     = {
-                    // ✅ Ferme le dialog
-                    viewModel.clearPendingExtraRow()
-                    if (adAvailable) {
-                        adManager.showRewardedAdSolution(
-                            activity      = context as Activity,
-                            onRewarded    = {
-                                viewModel.addExtraTry()
-                            },
+                            onRewarded    = { viewModel.addExtraTry() },
                             onAdDismissed = {}
                         )
                     } else {
                         viewModel.finishGameAsLost()
                     }
                 },
-                onDismiss     = {
-                    viewModel.finishGameAsLost()
-                }
+                onDismiss     = { viewModel.finishGameAsLost() }
+            )
+        }
+
+        if (pendingExtraRow == 6) {
+            val adAvailable = adManager.isRewardedAdSolutionAvailable()
+            ExtraRowAdDialog(
+                rowNumber     = 6,
+                isAdAvailable = adAvailable,
+                onWatchAd     = {
+                    viewModel.clearPendingExtraRow()
+                    if (adAvailable) {
+                        adManager.showRewardedAdSolution(
+                            activity      = context as Activity,
+                            onRewarded    = { viewModel.addExtraTry() },
+                            onAdDismissed = {}
+                        )
+                    } else {
+                        viewModel.finishGameAsLost()
+                    }
+                },
+                onDismiss     = { viewModel.finishGameAsLost() }
             )
         }
 
@@ -442,23 +445,20 @@ private fun ExtraRowAdDialog(
 ) {
     androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
         Card(
-            shape    = RoundedCornerShape(20.dp),
+            shape    = RoundedCornerShape(18.dp),
             colors   = CardDefaults.cardColors(containerColor = Color.White),
-            modifier = Modifier.fillMaxWidth().padding(16.dp)
+            modifier = Modifier.fillMaxWidth(0.85f).padding(16.dp)
         ) {
             Column(
-                modifier            = Modifier.fillMaxWidth().padding(24.dp),
+                modifier            = Modifier.fillMaxWidth().padding(20.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(14.dp)
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Text(
-                    text     = if (isAdAvailable) "🎬" else "😔",
-                    fontSize = 48.sp
-                )
+                Text(text = if (isAdAvailable) "🎬" else "😔", fontSize = 44.sp)
 
                 Text(
                     text       = if (rowNumber == 5) "Débloquer la ligne 5" else "Dernière chance — Ligne 6",
-                    fontSize   = 20.sp,
+                    fontSize   = 18.sp,
                     fontWeight = FontWeight.Black,
                     color      = Color(0xFF334155),
                     textAlign  = TextAlign.Center
@@ -466,54 +466,35 @@ private fun ExtraRowAdDialog(
 
                 Text(
                     text = when {
-                        !isAdAvailable ->
-                            "Aucune vidéo disponible pour le moment.\nVous perdez cette partie."
-                        rowNumber == 5 ->
-                            "Regardez une courte vidéo pour obtenir\nune tentative supplémentaire !"
-                        else ->
-                            "Regardez une dernière vidéo pour votre\nultime tentative. Bonne chance !"
+                        !isAdAvailable -> "Aucune vidéo disponible.\nVous perdez cette partie."
+                        rowNumber == 5 -> "Regardez une courte vidéo pour\nobtenir une tentative supplémentaire !"
+                        else           -> "Regardez une dernière vidéo pour\nvotre ultime tentative."
                     },
-                    fontSize  = 14.sp,
+                    fontSize  = 13.sp,
                     color     = Color(0xFF64748B),
                     textAlign = TextAlign.Center
                 )
 
                 if (isAdAvailable) {
-                    // ✅ Pub disponible → bouton regarder
                     Button(
                         onClick  = onWatchAd,
-                        modifier = Modifier.fillMaxWidth().height(50.dp),
+                        modifier = Modifier.fillMaxWidth().height(48.dp),
                         colors   = ButtonDefaults.buttonColors(containerColor = Color(0xFF7C3AED)),
-                        shape    = RoundedCornerShape(12.dp)
+                        shape    = RoundedCornerShape(10.dp)
                     ) {
-                        Text(
-                            text       = "▶  Regarder la vidéo",
-                            fontSize   = 16.sp,
-                            fontWeight = FontWeight.Bold,
-                            color      = Color.White
-                        )
+                        Text("▶  Regarder la vidéo", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = Color.White)
                     }
                     TextButton(onClick = onDismiss) {
-                        Text(
-                            text     = "Non merci, abandonner",
-                            fontSize = 13.sp,
-                            color    = Color(0xFF94A3B8)
-                        )
+                        Text("Non merci, abandonner", fontSize = 12.sp, color = Color(0xFF94A3B8))
                     }
                 } else {
-                    // ✅ Pas de pub → bouton "Terminer" → perdu
                     Button(
                         onClick  = onDismiss,
-                        modifier = Modifier.fillMaxWidth().height(50.dp),
+                        modifier = Modifier.fillMaxWidth().height(48.dp),
                         colors   = ButtonDefaults.buttonColors(containerColor = Color(0xFFF44336)),
-                        shape    = RoundedCornerShape(12.dp)
+                        shape    = RoundedCornerShape(10.dp)
                     ) {
-                        Text(
-                            text       = "Terminer la partie",
-                            fontSize   = 16.sp,
-                            fontWeight = FontWeight.Bold,
-                            color      = Color.White
-                        )
+                        Text("Terminer la partie", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = Color.White)
                     }
                 }
             }
@@ -581,12 +562,17 @@ private fun GameTile(
     Box(
         modifier = Modifier
             .size(size)
-            .clip(RoundedCornerShape(8.dp))
+            .clip(RoundedCornerShape(6.dp))
             .background(backgroundColor)
-            .border(2.dp, borderColor, RoundedCornerShape(8.dp)),
+            .border(2.dp, borderColor, RoundedCornerShape(6.dp)),
         contentAlignment = Alignment.Center
     ) {
-        Text(text = letter, fontSize = (size.value * 0.5).sp, fontWeight = FontWeight.Bold, color = textColor)
+        Text(
+            text = letter,
+            fontSize = (size.value * 0.45).sp,
+            fontWeight = FontWeight.Bold,
+            color = textColor
+        )
     }
 }
 
@@ -616,7 +602,7 @@ private fun KeyButton(
     Box(
         modifier = modifier
             .height(height)
-            .clip(RoundedCornerShape(8.dp))
+            .clip(RoundedCornerShape(6.dp))
             .background(backgroundColor)
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center
@@ -638,19 +624,35 @@ private fun ActionKeyButton(
     Box(
         modifier = modifier
             .height(height)
-            .clip(RoundedCornerShape(8.dp))
+            .clip(RoundedCornerShape(6.dp))
             .background(backgroundColor)
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
-        Text(text = key, fontWeight = FontWeight.Bold, fontSize = textSize, color = textColor, maxLines = 1, textAlign = TextAlign.Center)
+        Text(
+            text = key,
+            fontWeight = FontWeight.Bold,
+            fontSize = textSize,
+            color = textColor,
+            maxLines = 1,
+            textAlign = TextAlign.Center
+        )
     }
 }
 
 @Composable
-private fun LegendItem(color: Color, text: String, textSize: androidx.compose.ui.unit.TextUnit) {
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-        Box(modifier = Modifier.size(14.dp).clip(RoundedCornerShape(4.dp)).background(color))
+private fun LegendItem(
+    color: Color,
+    text: String,
+    textSize: androidx.compose.ui.unit.TextUnit,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(3.dp),
+        modifier = modifier
+    ) {
+        Box(modifier = Modifier.size(12.dp).clip(RoundedCornerShape(3.dp)).background(color))
         Text(text = text, fontSize = textSize, fontWeight = FontWeight.SemiBold, color = Color(0xFF334155))
     }
 }
