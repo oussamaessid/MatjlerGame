@@ -42,6 +42,8 @@ class GameViewModel(
     var pendingExtraRow by mutableStateOf<Int?>(null)
         private set
 
+    private var isRevealing = false
+
     // ─────────────────────────────────────────────────────────────
     // INIT
     // ─────────────────────────────────────────────────────────────
@@ -124,7 +126,7 @@ class GameViewModel(
     // ─────────────────────────────────────────────────────────────
 
     fun handleKeyPress(key: String) {
-        if (gameState.gameOver) return
+        if (gameState.gameOver || isRevealing) return
         when (key) {
             "ENTER"  -> submitGuess()
             "DELETE" -> deleteLastChar()
@@ -171,6 +173,7 @@ class GameViewModel(
 
 
     private fun revealColors(guessStr: String) {
+        isRevealing = true
         val statuses   = calculateTileStatusesUseCase(guessStr, level.solution, level.slots)
         val currentRow = gameState.currentGuess
 
@@ -187,7 +190,7 @@ class GameViewModel(
 
             delay(300)
 
-            val attempts = gameState.currentGuess + 1
+            val attempts = currentRow + 1
 
             when {
                 guessStr == level.solution -> {
@@ -206,21 +209,21 @@ class GameViewModel(
                 }
 
                 //  Échec ligne 4 (index 3) → proposer vidéo pour ligne 5
-                gameState.currentGuess == 3 -> {
+                currentRow == 3 -> {
                     gameState = gameState.copy(gameOver = true, isWon = false)
                     saveGameState()
                     pendingExtraRow = 5
                 }
 
                 //  Échec ligne 5 (index 4) → proposer vidéo pour ligne 6
-                gameState.currentGuess == 4 -> {
+                currentRow == 4 -> {
                     gameState = gameState.copy(gameOver = true, isWon = false)
                     saveGameState()
                     pendingExtraRow = 6
                 }
 
                 //  Échec ligne 6 (index 5) → perdu définitivement
-                gameState.currentGuess == 5 -> {
+                currentRow == 5 -> {
                     showMessage("😔 Perdu ! La solution était : ${level.solution}", permanent = true)
                     gameState = gameState.copy(gameOver = true, isWon = false)
                     saveGameState()
@@ -230,6 +233,7 @@ class GameViewModel(
                 }
 
                 else -> {
+                    isRevealing = false
                     gameState = gameState.copy(
                         currentGuess = gameState.currentGuess + 1,
                         currentPos   = 0
@@ -294,6 +298,7 @@ class GameViewModel(
 
     fun resetLevel() {
         clearSavedState()
+        isRevealing = false
         gameState = createInitialGameState()
     }
 }
