@@ -254,6 +254,7 @@ class GameViewModel(
         newGuesses.add(List(level.slots) { "" })
         newTileStatuses.add(List(level.slots) { TileStatus.EMPTY })
         val newRow = newGuesses.size - 1
+        isRevealing = false
         gameState = gameState.copy(
             guesses      = newGuesses,
             tileStatuses = newTileStatuses,
