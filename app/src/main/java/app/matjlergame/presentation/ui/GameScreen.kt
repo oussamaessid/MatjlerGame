@@ -128,11 +128,12 @@ fun GameScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     val scope             = rememberCoroutineScope()
 
-    // ✅ Interstitiel périodique
+    // Interstitiel périodique — timer réinitialisé à l'ouverture du jeu
     LaunchedEffect(Unit) {
+        adManager.resetPeriodicAdTimer()
         adManager.loadPeriodicInterstitial()
         while (true) {
-            delay(60_000L)
+            delay(4 * 60 * 1000L)
             if (!gameState.gameOver) {
                 adManager.showPeriodicInterstitialIfReady(context as Activity)
             }
@@ -347,9 +348,9 @@ fun GameScreen(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(Color.White)
+                    .background(Color(0xFFF0F0F0))
                     .navigationBarsPadding()
-                    .padding(bottom = 2.dp),
+                    .padding(top = 10.dp, bottom = 2.dp),
                 contentAlignment = Alignment.Center
             ) {
                 AndroidView(

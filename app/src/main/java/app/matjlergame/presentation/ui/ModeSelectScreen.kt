@@ -187,9 +187,9 @@ fun ModeSelectScreen(
             Box(
                 modifier         = Modifier
                     .fillMaxWidth()
-                    .background(Color.Transparent)
+                    .background(Color(0x22000000))
                     .navigationBarsPadding()
-                    .padding(bottom = 4.dp),
+                    .padding(top = 10.dp, bottom = 4.dp),
                 contentAlignment = Alignment.Center
             ) {
                 AndroidView(
