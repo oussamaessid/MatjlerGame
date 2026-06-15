@@ -44,6 +44,16 @@ class GameViewModel(
 
     private var isRevealing = false
 
+    init {
+        // Restaurer pendingExtraRow si le jeu était bloqué (gameOver sauvegardé, pendingExtraRow non sauvegardé)
+        if (gameState.gameOver && !gameState.isWon) {
+            when {
+                gameState.guesses.size == 4 && gameState.currentGuess == 3 -> pendingExtraRow = 5
+                gameState.guesses.size == 5 && gameState.currentGuess == 4 -> pendingExtraRow = 6
+            }
+        }
+    }
+
     // ─────────────────────────────────────────────────────────────
     // INIT
     // ─────────────────────────────────────────────────────────────

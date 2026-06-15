@@ -30,9 +30,11 @@ import app.matjlergame.domain.model.GameMode
 import app.matjlergame.domain.model.Level
 import app.matjlergame.domain.model.TileStatus
 import app.matjlergame.presentation.viewmodel.GameViewModel
+import com.google.android.gms.ads.AdListener
 import com.google.android.gms.ads.AdRequest
 import com.google.android.gms.ads.AdSize
 import com.google.android.gms.ads.AdView
+import com.google.android.gms.ads.LoadAdError
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import androidx.activity.compose.BackHandler
@@ -62,11 +64,24 @@ fun GameScreen(
     val screenHeight  = configuration.screenHeightDp.dp
     val screenWidth   = configuration.screenWidthDp.dp
 
+    var gameBannerLoaded by remember { mutableStateOf(false) }
+    val gameBannerAdView = remember {
+        AdView(context).also { view ->
+            view.adUnitId = AdManager.BANNER_GAME_AD_UNIT_ID
+            view.setAdSize(AdSize.BANNER)
+            view.adListener = object : AdListener() {
+                override fun onAdLoaded() { gameBannerLoaded = true }
+                override fun onAdFailedToLoad(error: LoadAdError) { gameBannerLoaded = false }
+            }
+            view.loadAd(AdRequest.Builder().build())
+        }
+    }
+
     // ── CALCUL DYNAMIQUE DE LA TAILLE DES CELLULES ──────────────────
     // Réserve d'espace pour header, clavier, banner et espacements
     val headerHeight       = 60.dp
     val keyboardHeight     = 220.dp
-    val bannerHeight       = 50.dp
+    val bannerHeight       = if (gameBannerLoaded) 50.dp else 0.dp
     val totalReservedSpace = headerHeight + keyboardHeight + bannerHeight + 60.dp // + marges/espacements
 
     // Hauteur disponible pour la grille
@@ -127,6 +142,9 @@ fun GameScreen(
 
     val snackbarHostState = remember { SnackbarHostState() }
     val scope             = rememberCoroutineScope()
+
+    // null = pas affiché, 5 = retry pour ligne 5, 6 = retry pour ligne 6
+    var showRetryVideoDialog by remember { mutableStateOf<Int?>(null) }
 
     // Interstitiel périodique — timer réinitialisé à l'ouverture du jeu
     LaunchedEffect(Unit) {
@@ -345,26 +363,22 @@ fun GameScreen(
             // ════════════════
             // BANNER
             // ════════════════
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(Color(0xFFF0F0F0))
-                    .navigationBarsPadding()
-                    .padding(top = 10.dp, bottom = 2.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                AndroidView(
-                    factory = { ctx ->
-                        AdView(ctx).apply {
-                            adUnitId = AdManager.BANNER_GAME_AD_UNIT_ID
-                            setAdSize(AdSize.BANNER)
-                            loadAd(AdRequest.Builder().build())
-                        }
-                    },
+            if (gameBannerLoaded) {
+                Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(50.dp)
-                )
+                        .background(Color.Transparent)
+                        .navigationBarsPadding()
+                        .padding(top = 4.dp, bottom = 2.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    AndroidView(
+                        factory  = { gameBannerAdView },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(50.dp)
+                    )
+                }
             }
 
         } // fin Column
@@ -397,10 +411,19 @@ fun GameScreen(
                 onWatchAd     = {
                     viewModel.clearPendingExtraRow()
                     if (adAvailable) {
+                        var rewarded = false
                         adManager.showRewardedAdExtraTry(
                             activity      = context as Activity,
-                            onRewarded    = { viewModel.addExtraTry() },
-                            onAdDismissed = {}
+                            onRewarded    = { rewarded = true; viewModel.addExtraTry() },
+                            onAdDismissed = {
+                                if (!rewarded) {
+                                    if (adManager.isRewardedAdExtraTryAvailable()) {
+                                        showRetryVideoDialog = 5
+                                    } else {
+                                        viewModel.finishGameAsLost()
+                                    }
+                                }
+                            }
                         )
                     } else {
                         viewModel.finishGameAsLost()
@@ -418,16 +441,61 @@ fun GameScreen(
                 onWatchAd     = {
                     viewModel.clearPendingExtraRow()
                     if (adAvailable) {
+                        var rewarded = false
                         adManager.showRewardedAdSolution(
                             activity      = context as Activity,
-                            onRewarded    = { viewModel.addExtraTry() },
-                            onAdDismissed = {}
+                            onRewarded    = { rewarded = true; viewModel.addExtraTry() },
+                            onAdDismissed = {
+                                if (!rewarded) {
+                                    if (adManager.isRewardedAdSolutionAvailable()) {
+                                        showRetryVideoDialog = 6
+                                    } else {
+                                        viewModel.finishGameAsLost()
+                                    }
+                                }
+                            }
                         )
                     } else {
                         viewModel.finishGameAsLost()
                     }
                 },
                 onDismiss     = { viewModel.finishGameAsLost() }
+            )
+        }
+
+        if (showRetryVideoDialog == 5) {
+            RetryVideoDialog(
+                onWatchAgain = {
+                    showRetryVideoDialog = null
+                    var rewarded2 = false
+                    adManager.showRewardedAdExtraTry(
+                        activity      = context as Activity,
+                        onRewarded    = { rewarded2 = true; viewModel.addExtraTry() },
+                        onAdDismissed = { if (!rewarded2) viewModel.finishGameAsLost() }
+                    )
+                },
+                onGiveUp = {
+                    showRetryVideoDialog = null
+                    viewModel.finishGameAsLost()
+                }
+            )
+        }
+
+        if (showRetryVideoDialog == 6) {
+            RetryVideoDialog(
+                onWatchAgain = {
+                    showRetryVideoDialog = null
+                    var rewarded2 = false
+                    adManager.showRewardedAdSolution(
+                        activity      = context as Activity,
+                        onRewarded    = { rewarded2 = true; viewModel.addExtraTry() },
+                        onAdDismissed = { if (!rewarded2) viewModel.finishGameAsLost() }
+                    )
+                },
+                onGiveUp = {
+                    showRetryVideoDialog = null
+                    viewModel.finishGameAsLost()
+                }
             )
         }
 
@@ -497,6 +565,56 @@ private fun ExtraRowAdDialog(
                     ) {
                         Text("Terminer la partie", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = Color.White)
                     }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun RetryVideoDialog(
+    onWatchAgain : () -> Unit,
+    onGiveUp     : () -> Unit
+) {
+    androidx.compose.ui.window.Dialog(onDismissRequest = onGiveUp) {
+        Card(
+            shape    = RoundedCornerShape(18.dp),
+            colors   = CardDefaults.cardColors(containerColor = Color.White),
+            modifier = Modifier.fillMaxWidth(0.85f).padding(16.dp)
+        ) {
+            Column(
+                modifier            = Modifier.fillMaxWidth().padding(20.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text(text = "⏸️", fontSize = 44.sp)
+
+                Text(
+                    text       = "Vidéo non terminée",
+                    fontSize   = 18.sp,
+                    fontWeight = FontWeight.Black,
+                    color      = Color(0xFF334155),
+                    textAlign  = TextAlign.Center
+                )
+
+                Text(
+                    text      = "Vous n'avez pas terminé la vidéo.\nUne autre vidéo est disponible.",
+                    fontSize  = 13.sp,
+                    color     = Color(0xFF64748B),
+                    textAlign = TextAlign.Center
+                )
+
+                Button(
+                    onClick  = onWatchAgain,
+                    modifier = Modifier.fillMaxWidth().height(48.dp),
+                    colors   = ButtonDefaults.buttonColors(containerColor = Color(0xFF7C3AED)),
+                    shape    = RoundedCornerShape(10.dp)
+                ) {
+                    Text("▶  Regarder une autre vidéo", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                }
+
+                TextButton(onClick = onGiveUp) {
+                    Text("Non merci, abandonner", fontSize = 12.sp, color = Color(0xFF94A3B8))
                 }
             }
         }

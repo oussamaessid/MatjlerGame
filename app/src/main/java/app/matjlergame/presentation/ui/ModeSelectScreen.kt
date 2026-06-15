@@ -49,9 +49,15 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import app.matjlergame.ads.AdManager
 import app.matjlergame.domain.model.GameMode
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.TextUnit
+import com.google.android.gms.ads.AdListener
 import com.google.android.gms.ads.AdRequest
 import com.google.android.gms.ads.AdSize
 import com.google.android.gms.ads.AdView
+import com.google.android.gms.ads.LoadAdError
 
 // ✅ AUCUNE vérification internet ici.
 // AUCUN dialog internet ici.
@@ -66,6 +72,42 @@ fun ModeSelectScreen(
 ) {
     // ✅ SUPPRIMÉ : showNoInternetDialog local — c'était la cause du bug
     // Le dialog internet est géré uniquement dans MainActivity
+
+    val configuration = LocalConfiguration.current
+    val screenHeight  = configuration.screenHeightDp.dp
+    val screenWidth   = configuration.screenWidthDp.dp
+    val ctx = LocalContext.current
+
+    val cardHeight  = when {
+        screenHeight < 600.dp -> 68.dp
+        screenHeight < 700.dp -> 78.dp
+        screenHeight < 800.dp -> 88.dp
+        else                  -> 100.dp
+    }
+    val cardSpacing = when {
+        screenHeight < 600.dp -> 8.dp
+        screenHeight < 700.dp -> 14.dp
+        screenHeight < 800.dp -> 22.dp
+        else                  -> 30.dp
+    }
+    val cardWidth   = minOf(300.dp, screenWidth - 48.dp)
+    val cardEmojiSz = if (screenHeight < 700.dp) 28.sp else 40.sp
+    val cardTitleSz = if (screenHeight < 700.dp) 18.sp else 24.sp
+    val cardDescSz  = if (screenHeight < 700.dp) 11.sp else 14.sp
+    val cardPadding = if (screenHeight < 700.dp) 10.dp else 20.dp
+
+    var bannerLoaded by remember { mutableStateOf(false) }
+    val bannerAdView = remember {
+        AdView(ctx).also { view ->
+            view.adUnitId = AdManager.BANNER_MODE_SELECT_AD_UNIT_ID
+            view.setAdSize(AdSize.BANNER)
+            view.adListener = object : AdListener() {
+                override fun onAdLoaded() { bannerLoaded = true }
+                override fun onAdFailedToLoad(error: LoadAdError) { bannerLoaded = false }
+            }
+            view.loadAd(AdRequest.Builder().build())
+        }
+    }
 
     Box(
         modifier = Modifier
@@ -115,7 +157,7 @@ fun ModeSelectScreen(
             ) {
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(32.dp),
+                    verticalArrangement = Arrangement.spacedBy(cardSpacing),
                     modifier            = Modifier.padding(24.dp)
                 ) {
                     val infiniteTransition = rememberInfiniteTransition(label = "title")
@@ -148,8 +190,6 @@ fun ModeSelectScreen(
                         )
                     }
 
-                    Spacer(modifier = Modifier.height(16.dp))
-
                     val cardsEnabled = !isLoading
 
                     // ✅ Les cards appellent directement onModeSelected
@@ -160,6 +200,12 @@ fun ModeSelectScreen(
                         description = "Pour débuter",
                         gradient    = listOf(Color(0xFF4CAF50), Color(0xFF8BC34A)),
                         enabled     = cardsEnabled,
+                        cardHeight  = cardHeight,
+                        cardWidth   = cardWidth,
+                        emojiSize   = cardEmojiSz,
+                        titleSize   = cardTitleSz,
+                        descSize    = cardDescSz,
+                        cardPadding = cardPadding,
                         onClick     = { onModeSelected(GameMode.EASY) }
                     )
 
@@ -169,6 +215,12 @@ fun ModeSelectScreen(
                         description = "Un peu plus dur",
                         gradient    = listOf(Color(0xFFFF9800), Color(0xFFFFB74D)),
                         enabled     = cardsEnabled,
+                        cardHeight  = cardHeight,
+                        cardWidth   = cardWidth,
+                        emojiSize   = cardEmojiSz,
+                        titleSize   = cardTitleSz,
+                        descSize    = cardDescSz,
+                        cardPadding = cardPadding,
                         onClick     = { onModeSelected(GameMode.MEDIUM) }
                     )
 
@@ -178,32 +230,34 @@ fun ModeSelectScreen(
                         description = "Expert seulement",
                         gradient    = listOf(Color(0xFFF44336), Color(0xFFE91E63)),
                         enabled     = cardsEnabled,
+                        cardHeight  = cardHeight,
+                        cardWidth   = cardWidth,
+                        emojiSize   = cardEmojiSz,
+                        titleSize   = cardTitleSz,
+                        descSize    = cardDescSz,
+                        cardPadding = cardPadding,
                         onClick     = { onModeSelected(GameMode.HARD) }
                     )
                 }
             }
 
             // ── Bannière pub ─────────────────────────────────────────
-            Box(
-                modifier         = Modifier
-                    .fillMaxWidth()
-                    .background(Color(0x22000000))
-                    .navigationBarsPadding()
-                    .padding(top = 10.dp, bottom = 4.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                AndroidView(
-                    factory = { ctx ->
-                        AdView(ctx).apply {
-                            adUnitId = AdManager.BANNER_MODE_SELECT_AD_UNIT_ID
-                            setAdSize(AdSize.BANNER)
-                            loadAd(AdRequest.Builder().build())
-                        }
-                    },
-                    modifier = Modifier
+            if (bannerLoaded) {
+                Box(
+                    modifier         = Modifier
                         .fillMaxWidth()
-                        .height(50.dp)
-                )
+                        .background(Color.Transparent)
+                        .navigationBarsPadding()
+                        .padding(top = 4.dp, bottom = 4.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    AndroidView(
+                        factory  = { bannerAdView },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(50.dp)
+                    )
+                }
             }
         }
 
@@ -243,6 +297,12 @@ private fun ModeCard(
     description : String,
     gradient    : List<Color>,
     enabled     : Boolean = true,
+    cardHeight  : Dp = 100.dp,
+    cardWidth   : Dp = 300.dp,
+    emojiSize   : TextUnit = 40.sp,
+    titleSize   : TextUnit = 24.sp,
+    descSize    : TextUnit = 14.sp,
+    cardPadding : Dp = 20.dp,
     onClick     : () -> Unit
 ) {
     var isPressed by remember { mutableStateOf(false) }
@@ -255,9 +315,9 @@ private fun ModeCard(
     Box(
         modifier = Modifier
             .scale(scale)
-            .width(300.dp)
-            .height(100.dp)
-            .clip(RoundedCornerShape(20.dp))
+            .width(cardWidth)
+            .height(cardHeight)
+            .clip(RoundedCornerShape(16.dp))
             .background(
                 if (enabled) {
                     Brush.horizontalGradient(gradient)
@@ -271,28 +331,28 @@ private fun ModeCard(
                 isPressed = true
                 onClick()
             }
-            .padding(20.dp),
+            .padding(cardPadding),
         contentAlignment = Alignment.CenterStart
     ) {
         Row(
             verticalAlignment     = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(16.dp)
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Text(
                 text     = emoji,
-                fontSize = 40.sp,
+                fontSize = emojiSize,
                 modifier = Modifier.scale(if (enabled) 1f else 0.8f)
             )
             Column {
                 Text(
                     text       = title,
-                    fontSize   = 24.sp,
+                    fontSize   = titleSize,
                     fontWeight = FontWeight.Bold,
                     color      = Color.White.copy(alpha = if (enabled) 1f else 0.6f)
                 )
                 Text(
                     text     = description,
-                    fontSize = 14.sp,
+                    fontSize = descSize,
                     color    = Color.White.copy(alpha = if (enabled) 0.9f else 0.5f)
                 )
             }

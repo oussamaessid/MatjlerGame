@@ -257,6 +257,41 @@ fun MathlerGameApp(
                 return@MathlerGameApp
             }
 
+            // ── Pré-vérification : jeu bloqué (gameOver sans ligne vide) ──────
+            val gameStateKey   = "game_state_${mode.name}_level_${level.number}"
+            val stuckPendingRow = remember(gameStateKey) {
+                parseSavedStuckRow(sharedPreferences.getString(gameStateKey, null))
+            }
+
+            if (stuckPendingRow != null) {
+                val adAvailable = when (stuckPendingRow) {
+                    5    -> adManager.isRewardedAdExtraTryAvailable()
+                    else -> adManager.isRewardedAdSolutionAvailable()
+                }
+                if (!adAvailable) {
+                    // Aucune vidéo disponible → résultat perdu directement, sans ouvrir l'écran de jeu
+                    LaunchedEffect("stuck_no_ad_$gameStateKey") {
+                        sharedPreferences.edit().remove(gameStateKey).apply()
+                        if (!dailyLevelManager.hasPlayedToday(mode, sharedPreferences)) {
+                            dailyLevelManager.saveTodayResult(mode, false, stuckPendingRow - 1, sharedPreferences)
+                            dailyLevelManager.updateStatistics(mode, false, sharedPreferences)
+                        }
+                        val result = dailyLevelManager.getTodayResult(mode, sharedPreferences)
+                        val stats  = dailyLevelManager.getStatistics(mode, sharedPreferences)
+                        if (result != null) {
+                            dialogMode       = mode
+                            dialogResult     = result
+                            dialogStats      = stats
+                            showResultDialog = true
+                        }
+                        cachedLevel = null
+                        navigationViewModel.navigateBack()
+                    }
+                    return@MathlerGameApp
+                }
+                // Vidéo disponible → le GameViewModel restaurera pendingExtraRow dans son init {}
+            }
+
             val gameViewModel = remember(level) {
                 GameViewModel(
                     level                    = level,
@@ -299,4 +334,21 @@ fun MathlerGameApp(
             LaunchedEffect(Unit) { navigationViewModel.navigateBack() }
         }
     }
+}
+
+// Retourne 5 ou 6 si l'état sauvegardé est "bloqué" (gameOver sans ligne vide),
+// null sinon.
+private fun parseSavedStuckRow(json: String?): Int? {
+    if (json == null) return null
+    return try {
+        val obj          = org.json.JSONObject(json)
+        if (!obj.getBoolean("gameOver") || obj.getBoolean("isWon")) return null
+        val currentGuess = obj.getInt("currentGuess")
+        val guessesSize  = obj.getJSONArray("guesses").length()
+        when {
+            currentGuess == 3 && guessesSize == 4 -> 5
+            currentGuess == 4 && guessesSize == 5 -> 6
+            else -> null
+        }
+    } catch (e: Exception) { null }
 }
