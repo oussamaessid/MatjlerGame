@@ -151,7 +151,7 @@ fun GameScreen(
         adManager.resetPeriodicAdTimer()
         adManager.loadPeriodicInterstitial()
         while (true) {
-            delay(4 * 60 * 1000L)
+            delay(6 * 60 * 1000L)
             if (!gameState.gameOver) {
                 adManager.showPeriodicInterstitialIfReady(context as Activity)
             }
@@ -369,7 +369,7 @@ fun GameScreen(
                         .fillMaxWidth()
                         .background(Color.Transparent)
                         .navigationBarsPadding()
-                        .padding(top = 4.dp, bottom = 2.dp),
+                        .padding(top = 12.dp, bottom = 4.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     AndroidView(

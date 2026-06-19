@@ -26,7 +26,7 @@ class AdManager(private val context: Context) {
     private var interstitialPeriodic: InterstitialAd? = null
     private var isLoadingInterstitialPeriodic = false
     private var lastPeriodicAdShownTime: Long = System.currentTimeMillis()
-    private val periodicAdIntervalMs = 4 * 60 * 1000L
+    private val periodicAdIntervalMs = 6 * 60 * 1000L
 
     private var isLoadingAppOpen = false
     private var isLoadingRewardedExtraTry = false
@@ -43,7 +43,7 @@ class AdManager(private val context: Context) {
     companion object {
         private const val TAG = "AdManager"
 
-        private val USE_TEST_ADS = BuildConfig.DEBUG
+        private val USE_TEST_ADS = false
 
         private const val TEST_APP_OPEN_ID = "ca-app-pub-3940256099942544/9257395921"
         private const val TEST_BANNER_MODE_SELECT_ID = "ca-app-pub-3940256099942544/6300978111"
@@ -85,6 +85,16 @@ class AdManager(private val context: Context) {
 
     fun initialize() {
         try {
+            // Enregistrez votre appareil physique ici pour les tests en mode release.
+            // Trouvez votre ID dans les logs Android : "Use RequestConfiguration.Builder().setTestDeviceIds(Arrays.asList("VOTRE_ID"))"
+            val testDeviceIds = listOf(
+                "VOTRE_DEVICE_ID_ICI" // Remplacez par votre vrai ID d'appareil de test
+            )
+            val requestConfig = com.google.android.gms.ads.RequestConfiguration.Builder()
+                .setTestDeviceIds(testDeviceIds)
+                .build()
+            MobileAds.setRequestConfiguration(requestConfig)
+
             MobileAds.initialize(context) {
                 val mode = if (USE_TEST_ADS) "TEST" else "PRODUCTION"
                 Log.d(TAG, "✅ AdMob initialisé en mode: $mode")
