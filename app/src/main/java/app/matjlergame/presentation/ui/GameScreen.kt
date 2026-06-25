@@ -361,8 +361,11 @@ fun GameScreen(
             }
 
             // ════════════════
-            // BANNER
+            // BANNER (ou marge de navigation si pas de pub)
             // ════════════════
+            if (!gameBannerLoaded) {
+                Spacer(Modifier.navigationBarsPadding())
+            }
             if (gameBannerLoaded) {
                 Box(
                     modifier = Modifier
