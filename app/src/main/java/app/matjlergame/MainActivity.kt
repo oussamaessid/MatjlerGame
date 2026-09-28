@@ -32,18 +32,20 @@ import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     private lateinit var adManager: AdManager
+    private val forceUpdate = ForceUpdateManager(this)
+
+    override fun onResume() {
+        super.onResume()
+        forceUpdate.resumeIfInProgress()
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
         val sharedPreferences = getSharedPreferences("mathler_prefs", MODE_PRIVATE)
+        // Lu AVANT setContent (qui le repasse à false) : pas d'App Open au premier lancement.
+        val isFirstLaunch = sharedPreferences.getBoolean("is_first_launch", true)
         adManager = AdManager(this)
-
-        try {
-            adManager.initialize()
-        } catch (e: Exception) {
-            Log.e("MainActivity", "Erreur initialisation AdMob", e)
-        }
 
         setContent {
             MaterialTheme {
@@ -55,15 +57,20 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-        window.decorView.postDelayed({
+        // Mise à jour obligatoire d'abord ; les pubs ne démarrent que si l'app est à jour
+        // (jamais d'App Open par-dessus l'écran de mise à jour).
+        forceUpdate.check {
             try {
-                adManager.loadAppOpenAd { adManager.showAppOpenAd(this) }
+                adManager.initialize()
+                if (!isFirstLaunch) {
+                    adManager.loadAppOpenAd { adManager.showAppOpenAd(this) }
+                }
                 adManager.loadRewardedAdExtraTry()
                 adManager.loadRewardedAdSolution()
             } catch (e: Exception) {
                 Log.e("MainActivity", "Erreur chargement annonces", e)
             }
-        }, 1000)
+        }
     }
 }
 

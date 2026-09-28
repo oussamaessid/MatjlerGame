@@ -12,8 +12,8 @@ android {
         applicationId = "app.matjlergame"
         minSdk = 26
         targetSdk = 36
-        versionCode = 5
-        versionName = "1.0"
+        versionCode = 6
+        versionName = "1.0.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -63,5 +63,8 @@ dependencies {
     implementation("com.google.code.gson:gson:2.10.1")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.7.0")
     implementation("com.google.android.gms:play-services-ads:22.6.0")
+    implementation("com.google.android.play:app-update-ktx:2.1.0")
+    // Fragment >= 1.3 requis pour registerForActivityResult (écran de mise à jour)
+    implementation("androidx.fragment:fragment-ktx:1.8.5")
 
 }

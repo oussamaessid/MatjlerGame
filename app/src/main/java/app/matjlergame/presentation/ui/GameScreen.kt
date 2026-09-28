@@ -35,7 +35,6 @@ import com.google.android.gms.ads.AdRequest
 import com.google.android.gms.ads.AdSize
 import com.google.android.gms.ads.AdView
 import com.google.android.gms.ads.LoadAdError
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import androidx.activity.compose.BackHandler
 
@@ -81,7 +80,7 @@ fun GameScreen(
     // Réserve d'espace pour header, clavier, banner et espacements
     val headerHeight       = 60.dp
     val keyboardHeight     = 220.dp
-    val bannerHeight       = if (gameBannerLoaded) 50.dp else 0.dp
+    val bannerHeight       = 50.dp + 24.dp
     val totalReservedSpace = headerHeight + keyboardHeight + bannerHeight + 60.dp // + marges/espacements
 
     // Hauteur disponible pour la grille
@@ -146,16 +145,12 @@ fun GameScreen(
     // null = pas affiché, 5 = retry pour ligne 5, 6 = retry pour ligne 6
     var showRetryVideoDialog by remember { mutableStateOf<Int?>(null) }
 
-    // Interstitiel périodique — timer réinitialisé à l'ouverture du jeu
+    // Pas d'interstitiel pendant la partie : une pub qui surgit pendant qu'on tape
+    // sur le clavier = clics accidentels (trafic invalide AdMob).
+    // On précharge seulement les vidéos récompensées (retente si un chargement a échoué).
     LaunchedEffect(Unit) {
-        adManager.resetPeriodicAdTimer()
-        adManager.loadPeriodicInterstitial()
-        while (true) {
-            delay(6 * 60 * 1000L)
-            if (!gameState.gameOver) {
-                adManager.showPeriodicInterstitialIfReady(context as Activity)
-            }
-        }
+        adManager.loadRewardedAdExtraTry()
+        adManager.loadRewardedAdSolution()
     }
 
     LaunchedEffect(gameState.message) {
@@ -361,20 +356,19 @@ fun GameScreen(
             }
 
             // ════════════════
-            // BANNER (ou marge de navigation si pas de pub)
+            // BANNER — espace TOUJOURS réservé : sinon, quand la pub arrive, le clavier
+            // remonte et le doigt qui visait "VALIDER" tombe sur la bannière (clic accidentel).
             // ════════════════
-            if (!gameBannerLoaded) {
-                Spacer(Modifier.navigationBarsPadding())
-            }
-            if (gameBannerLoaded) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(Color.Transparent)
-                        .navigationBarsPadding()
-                        .padding(top = 12.dp, bottom = 4.dp),
-                    contentAlignment = Alignment.Center
-                ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Color.Transparent)
+                    .navigationBarsPadding()
+                    .padding(top = 20.dp, bottom = 4.dp)
+                    .height(50.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                if (gameBannerLoaded) {
                     AndroidView(
                         factory  = { gameBannerAdView },
                         modifier = Modifier

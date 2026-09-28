@@ -241,16 +241,17 @@ fun ModeSelectScreen(
                 }
             }
 
-            // ── Bannière pub ─────────────────────────────────────────
-            if (bannerLoaded) {
-                Box(
-                    modifier         = Modifier
-                        .fillMaxWidth()
-                        .background(Color.Transparent)
-                        .navigationBarsPadding()
-                        .padding(top = 4.dp, bottom = 4.dp),
-                    contentAlignment = Alignment.Center
-                ) {
+            // ── Bannière pub (espace réservé : les cartes ne bougent pas quand elle arrive)
+            Box(
+                modifier         = Modifier
+                    .fillMaxWidth()
+                    .background(Color.Transparent)
+                    .navigationBarsPadding()
+                    .padding(top = 4.dp, bottom = 4.dp)
+                    .height(50.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                if (bannerLoaded) {
                     AndroidView(
                         factory  = { bannerAdView },
                         modifier = Modifier
