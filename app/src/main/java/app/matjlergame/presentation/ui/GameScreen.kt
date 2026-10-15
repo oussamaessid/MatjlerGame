@@ -221,7 +221,7 @@ fun GameScreen(
                     )
                 }
                 Text(
-                    text       = java.text.SimpleDateFormat("dd/MM", java.util.Locale.getDefault()).format(java.util.Date()),
+                    text       = "⏱ " + app.matjlergame.domain.model.GameTimer.format(viewModel.elapsedTimeMs),
                     fontSize   = headerTextSize,
                     fontWeight = FontWeight.Medium,
                     color      = Color.White,

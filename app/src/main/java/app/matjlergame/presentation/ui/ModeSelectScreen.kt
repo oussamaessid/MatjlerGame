@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -68,6 +69,10 @@ fun ModeSelectScreen(
     adManager: AdManager,
     isLoading: Boolean = false,
     onModeSelected: (GameMode) -> Unit,
+    playerName: String = "Mon profil",
+    playerAvatar: Int = 0,
+    onProfileClicked: () -> Unit = {},
+    onRankingClicked: () -> Unit = {},
     onHowToPlayClicked: () -> Unit = {}
 ) {
     // ✅ SUPPRIMÉ : showNoInternetDialog local — c'était la cause du bug
@@ -123,28 +128,28 @@ fun ModeSelectScreen(
             verticalArrangement = Arrangement.SpaceBetween
         ) {
 
-            // ── Header ──────────────────────────────────────────────
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .statusBarsPadding()
-                    .padding(top = 16.dp, start = 16.dp, end = 16.dp)
-                    .height(56.dp),
-                contentAlignment = Alignment.CenterEnd
+            Row(
+                modifier = Modifier.fillMaxWidth().statusBarsPadding().padding(16.dp).height(56.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                IconButton(
-                    onClick = onHowToPlayClicked,
-                    modifier = Modifier
-                        .size(48.dp)
-                        .clip(CircleShape)
-                        .background(Color.White.copy(alpha = 0.3f))
-                ) {
-                    Icon(
-                        imageVector        = Icons.Filled.Info,
-                        contentDescription = "Comment jouer",
-                        tint               = Color.White,
-                        modifier           = Modifier.size(28.dp)
-                    )
+                androidx.compose.material3.TextButton(enabled = !isLoading, onClick = onProfileClicked,
+                    modifier = Modifier.weight(1f)) {
+                    PlayerAvatar(playerAvatar, 36.dp)
+                    Spacer(Modifier.width(8.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(playerName, color = Color.White, maxLines = 1,
+                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                    }
+                }
+                IconButton(enabled = !isLoading, onClick = onRankingClicked,
+                    modifier = Modifier.size(48.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.22f))) {
+                    Icon(androidx.compose.ui.res.painterResource(app.matjlergame.R.drawable.ic_trophy),
+                        contentDescription = "Classements", tint = Color(0xFFFFD76A), modifier = Modifier.size(28.dp))
+                }
+                IconButton(onClick = onHowToPlayClicked,
+                    modifier = Modifier.size(48.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.22f))) {
+                    Icon(Icons.Filled.Info, contentDescription = "Comment jouer", tint = Color.White, modifier = Modifier.size(28.dp))
                 }
             }
 

@@ -80,6 +80,23 @@ fun MathlerGameApp(
     adManager: AdManager,
     context: MainActivity
 ) {
+    val playerRepository = remember { app.matjlergame.data.repository.PlayerRepository(
+        context.getSharedPreferences("players", android.content.Context.MODE_PRIVATE),
+        app.matjlergame.data.repository.FirebasePlayers(context.applicationContext)) }
+    LaunchedEffect(playerRepository) {
+        // Silent: scores not sent yet are retried here, after each game and on the leaderboard.
+        playerRepository.syncScores()
+    }
+    var playerPage by androidx.compose.runtime.saveable.rememberSaveable {
+        mutableStateOf<String?>(null)
+    }
+    if (playerPage != null) {
+        app.matjlergame.presentation.ui.PlayerScreen(playerRepository, playerPage == "ranking", setup = playerPage == "setup") {
+            playerRepository.completeSetup()
+            playerPage = null
+        }
+        return
+    }
     val repository                   = remember { LevelRepositoryImpl() }
     val validateExpressionUseCase    = remember { ValidateExpressionUseCase() }
     val calculateTileStatusesUseCase = remember { CalculateTileStatusesUseCase() }
@@ -98,19 +115,6 @@ fun MathlerGameApp(
     var loadingJob         by remember { mutableStateOf<Job?>(null) }
 
     var cachedLevel by remember { mutableStateOf<Pair<GameMode, Level>?>(null) }
-
-    val navigateToHowToPlay = remember {
-        val isFirst = sharedPreferences.getBoolean("is_first_launch", true)
-        if (isFirst) {
-            sharedPreferences.edit().putBoolean("is_first_launch", false).apply()
-        }
-        isFirst
-    }
-    if (navigateToHowToPlay) {
-        LaunchedEffect("howtoplay_once") {
-            navigationViewModel.navigateToHowToPlay()
-        }
-    }
 
     fun cancelLoading() {
         loadingJob?.cancel()
@@ -147,6 +151,10 @@ fun MathlerGameApp(
             ModeSelectScreen(
                 adManager          = adManager,
                 isLoading          = isLoading,
+                playerName = playerRepository.currentProfile.name,
+                playerAvatar = playerRepository.currentProfile.avatar,
+                onProfileClicked = { playerPage = "profile" },
+                onRankingClicked = { playerPage = "ranking" },
                 onHowToPlayClicked = { navigationViewModel.navigateToHowToPlay() },
                 onModeSelected     = { mode ->
 
@@ -224,6 +232,8 @@ fun MathlerGameApp(
                     mode       = dialogMode!!,
                     result     = dialogResult!!,
                     statistics = dialogStats!!,
+                    playerName = playerRepository.currentProfile.name,
+                    playerAvatar = playerRepository.currentProfile.avatar,
                     onDismiss  = {
                         showResultDialog = false
                         dialogMode       = null
@@ -265,7 +275,7 @@ fun MathlerGameApp(
             }
 
             // ── Pré-vérification : jeu bloqué (gameOver sans ligne vide) ──────
-            val gameStateKey   = "game_state_${mode.name}_level_${level.number}"
+            val gameStateKey   = "game_state_${app.matjlergame.domain.model.PlayerPeriods.today()}_${mode.name}_level_${level.number}"
             val stuckPendingRow = remember(gameStateKey) {
                 parseSavedStuckRow(sharedPreferences.getString(gameStateKey, null))
             }
@@ -304,10 +314,10 @@ fun MathlerGameApp(
                     level                    = level,
                     validateExpressionUseCase    = validateExpressionUseCase,
                     calculateTileStatusesUseCase = calculateTileStatusesUseCase,
-                    onLevelCompleted         = { won, attempts ->
-                        dailyLevelManager.saveTodayResult(mode, won, attempts, sharedPreferences)
-                        dailyLevelManager.updateStatistics(mode, won, sharedPreferences)
-                        val result = dailyLevelManager.getTodayResult(mode, sharedPreferences)
+                    onLevelCompleted         = { won, attempts, day ->
+                        dailyLevelManager.saveTodayResult(mode, won, attempts, sharedPreferences, day)
+                        dailyLevelManager.updateStatistics(mode, won, sharedPreferences, day)
+                        val result = dailyLevelManager.getTodayResult(mode, sharedPreferences, day)
                         val stats  = dailyLevelManager.getStatistics(mode, sharedPreferences)
                         if (result != null) {
                             dialogMode       = mode
@@ -320,10 +330,14 @@ fun MathlerGameApp(
                     },
                     totalLevels       = 1,
                     mode              = mode,
-                    sharedPreferences = sharedPreferences
+                    sharedPreferences = sharedPreferences,
+                    playerRepository = playerRepository
                 )
             }
 
+            DisposableEffect(gameViewModel) {
+                onDispose { gameViewModel.close() }
+            }
             GameScreen(
                 level       = level,
                 mode        = mode,

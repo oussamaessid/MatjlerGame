@@ -1,0 +1,1 @@
+{"indexes":[{"collectionGroup":"entries","queryScope":"COLLECTION","fields":[{"fieldPath":"correctCount","order":"DESCENDING"},{"fieldPath":"totalMs","order":"ASCENDING"}]}],"fieldOverrides":[]}

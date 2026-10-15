@@ -26,26 +26,9 @@ class NavigationViewModel(private val sharedPreferences: SharedPreferences) : Vi
     var currentLevelNumber by mutableStateOf(loadLevelNumber())
         private set
 
-    // Détermine l'écran initial : HOW_TO_PLAY si première fois, sinon MODE_SELECT
     private fun getInitialScreen(): Screen {
-        val isFirstLaunch = sharedPreferences.getBoolean(KEY_IS_FIRST_LAUNCH, true)
-
-        if (isFirstLaunch) {
-            sharedPreferences.edit().putBoolean(KEY_IS_FIRST_LAUNCH, false).apply()
-            return Screen.HOW_TO_PLAY
-        }
-
-        return loadScreen()
-    }
-
-    private fun loadScreen(): Screen {
-        val screenName = sharedPreferences.getString(KEY_CURRENT_SCREEN, Screen.MODE_SELECT.name)
-        val screen = try {
-            Screen.valueOf(screenName ?: Screen.MODE_SELECT.name)
-        } catch (e: Exception) {
-            Screen.MODE_SELECT
-        }
-        return if (screen == Screen.GAME) Screen.MODE_SELECT else screen
+        sharedPreferences.edit().putBoolean(KEY_IS_FIRST_LAUNCH, false).apply()
+        return Screen.MODE_SELECT
     }
 
     private fun loadMode(): GameMode? {

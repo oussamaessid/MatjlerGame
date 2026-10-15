@@ -12,6 +12,7 @@ import app.matjlergame.domain.model.Level
 import app.matjlergame.domain.model.TileStatus
 import app.matjlergame.domain.usecase.CalculateTileStatusesUseCase
 import app.matjlergame.domain.usecase.ValidateExpressionUseCase
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.json.JSONArray
@@ -21,20 +22,34 @@ class GameViewModel(
     private val level: Level,
     private val validateExpressionUseCase: ValidateExpressionUseCase,
     private val calculateTileStatusesUseCase: CalculateTileStatusesUseCase,
-    private val onLevelCompleted: (won: Boolean, attempts: Int) -> Unit,
+    private val onLevelCompleted: (won: Boolean, attempts: Int, day: java.time.LocalDate) -> Unit,
     private val totalLevels: Int,
     private val mode: GameMode? = null,
-    private val sharedPreferences: SharedPreferences? = null
+    private val sharedPreferences: SharedPreferences? = null,
+    private val playerRepository: app.matjlergame.data.repository.PlayerRepository? = null
 ) : ViewModel() {
 
+    private val playDay = app.matjlergame.domain.model.PlayerPeriods.today()
+    private val startedAt = mode?.let { playerRepository?.start(it, playDay) } ?: System.currentTimeMillis()
+    private var submittedDuration = 0L
+    private val responseTimer = app.matjlergame.domain.model.GameTimer(startedAt,
+        System.currentTimeMillis(), android.os.SystemClock.elapsedRealtime())
     private val gameStateKey = if (mode != null) {
-        "game_state_${mode.name}_level_${level.number}"
+        "game_state_${playDay}_${mode.name}_level_${level.number}"
     } else {
         "game_state_level_${level.number}"
     }
 
     var gameState by mutableStateOf(loadGameState())
         private set
+
+    private var timerStopped = gameState.isWon || (gameState.gameOver && gameState.currentGuess == 5)
+    var elapsedTimeMs by mutableStateOf(responseTimer.elapsed(android.os.SystemClock.elapsedRealtime()))
+        private set
+    private fun freezeTimer() {
+        elapsedTimeMs = responseTimer.stop(android.os.SystemClock.elapsedRealtime())
+        timerStopped = true
+    }
 
     // null = pas de dialog
     // 5   = proposer vidéo pour ligne 5
@@ -43,8 +58,42 @@ class GameViewModel(
         private set
 
     private var isRevealing = false
+    fun close() { viewModelScope.cancel() }
+
+    /** Stores the result locally, then pushes it to the global leaderboard in the background, silently. */
+    private fun recordResult(won: Boolean, durationMs: Long) {
+        val mode = mode ?: return
+        playerRepository?.record(mode, playDay, won, durationMs)
+        val resultKey = "result_${mode.name}_$playDay"
+        // Frozen alongside the score; reopening or sharing never restarts the timer.
+        if (sharedPreferences?.contains("${resultKey}_duration") == false) {
+            sharedPreferences.edit().putLong("${resultKey}_duration", durationMs.coerceAtLeast(1))
+                .putInt("${resultKey}_level", level.number).commit()
+        }
+        playerRepository?.let { repository ->
+            // Not tied to viewModelScope: the game screen closes right after the result.
+            kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                runCatching { repository.syncScores() }
+            }
+        }
+    }
 
     init {
+        if (timerStopped) {
+            responseTimer.restoreFinished(sharedPreferences?.getLong("${gameStateKey}_duration", 0L) ?: 0L)
+            elapsedTimeMs = responseTimer.elapsed(android.os.SystemClock.elapsedRealtime())
+        }
+        viewModelScope.launch {
+            while (!timerStopped) {
+                elapsedTimeMs = responseTimer.elapsed(android.os.SystemClock.elapsedRealtime())
+                delay(250)
+            }
+        }
+        // Recover a completed win if the process stopped during the result animation.
+        if (gameState.isWon) {
+            recordResult(true, sharedPreferences?.getLong("${gameStateKey}_duration", 1L) ?: 1L)
+            viewModelScope.launch { onLevelCompleted(true, gameState.currentGuess + 1, playDay) }
+        }
         // Restaurer pendingExtraRow si le jeu était bloqué (gameOver sauvegardé, pendingExtraRow non sauvegardé)
         if (gameState.gameOver && !gameState.isWon) {
             when {
@@ -124,7 +173,9 @@ class GameViewModel(
         obj.put("gameOver",     gameState.gameOver)
         obj.put("isWon",        gameState.isWon)
         obj.put("message",      gameState.message)
-        sharedPreferences.edit().putString(gameStateKey, obj.toString()).apply()
+        val edit = sharedPreferences.edit().putString(gameStateKey, obj.toString())
+            .putLong("${gameStateKey}_duration", submittedDuration.coerceAtLeast(1))
+        if (gameState.isWon) edit.commit() else edit.apply()
     }
 
     private fun clearSavedState() {
@@ -178,6 +229,9 @@ class GameViewModel(
             shakeRow()
             return
         }
+        if (guessStr == level.solution) freezeTimer()
+        else if (gameState.currentGuess == 5) freezeTimer()
+        submittedDuration = responseTimer.elapsed(android.os.SystemClock.elapsedRealtime()).coerceAtLeast(1)
         revealColors(guessStr)
     }
 
@@ -213,9 +267,9 @@ class GameViewModel(
                     showMessage(msg, permanent = true)
                     gameState = gameState.copy(gameOver = true, isWon = true)
                     saveGameState()
+                    recordResult(true, submittedDuration)
                     delay(2000)
-                    clearSavedState()
-                    onLevelCompleted(true, attempts)
+                    onLevelCompleted(true, attempts, playDay)
                 }
 
                 //  Échec ligne 4 (index 3) → proposer vidéo pour ligne 5
@@ -239,7 +293,9 @@ class GameViewModel(
                     saveGameState()
                     delay(2000)
                     clearSavedState()
-                    onLevelCompleted(false, 6)
+                    freezeTimer()
+                    recordResult(false, submittedDuration)
+                    onLevelCompleted(false, 6, playDay)
                 }
 
                 else -> {
@@ -281,8 +337,10 @@ class GameViewModel(
         pendingExtraRow = null
         val attempts = gameState.currentGuess + 1
         viewModelScope.launch {
+            freezeTimer()
             clearSavedState()
-            onLevelCompleted(false, attempts)
+            recordResult(false, elapsedTimeMs.coerceAtLeast(1))
+            onLevelCompleted(false, attempts, playDay)
         }
     }
 

@@ -10,4 +10,6 @@
    <include domain="sharedpref" path="."/>
    <exclude domain="sharedpref" path="device.xml"/>
 -->
+    <exclude domain="sharedpref" path="players.xml" />
+        <exclude domain="sharedpref" path="firebase_auth.xml" />
 </full-backup-content>

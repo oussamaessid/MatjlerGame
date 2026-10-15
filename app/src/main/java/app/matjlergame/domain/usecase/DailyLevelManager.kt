@@ -71,7 +71,7 @@ class DailyLevelManager(
             return null
         }
 
-        val today = LocalDate.now()
+        val today = app.matjlergame.domain.model.PlayerPeriods.today()
         val daysSinceStart = ChronoUnit.DAYS.between(startDate, today)
 
         val index = if (daysSinceStart >= 0) {
@@ -95,17 +95,17 @@ class DailyLevelManager(
      * Vérifie si le joueur a déjà joué aujourd'hui
      */
     fun hasPlayedToday(mode: GameMode, sharedPreferences: SharedPreferences): Boolean {
-        val today = LocalDate.now().toString()
+        val today = app.matjlergame.domain.model.PlayerPeriods.today().toString()
         val lastPlayedKey = "last_played_${mode.name}"
         val lastPlayed = sharedPreferences.getString(lastPlayedKey, "")
-        return lastPlayed == today
+        return lastPlayed == today || sharedPreferences.contains("result_${mode.name}_${today}_attempts")
     }
 
     /**
      * Marque le niveau du jour comme joué
      */
     fun markAsPlayed(mode: GameMode, sharedPreferences: SharedPreferences) {
-        val today = LocalDate.now().toString()
+        val today = app.matjlergame.domain.model.PlayerPeriods.today().toString()
         val lastPlayedKey = "last_played_${mode.name}"
         sharedPreferences.edit().putString(lastPlayedKey, today).apply()
     }
@@ -113,14 +113,23 @@ class DailyLevelManager(
     /**
      * Récupère le résultat du jour
      */
-    fun getTodayResult(mode: GameMode, sharedPreferences: SharedPreferences): DailyResult? {
-        val today = LocalDate.now().toString()
+    fun getTodayResult(mode: GameMode, sharedPreferences: SharedPreferences,
+        day: LocalDate = app.matjlergame.domain.model.PlayerPeriods.today()): DailyResult? {
+        val today = day.toString()
         val resultKey = "result_${mode.name}_$today"
         val won = sharedPreferences.getBoolean("${resultKey}_won", false)
         val attempts = sharedPreferences.getInt("${resultKey}_attempts", 0)
 
         if (attempts == 0) return null
-        return DailyResult(won, attempts)
+        // Recover timing from older saved game state where possible, without inventing a time.
+        val oldKey = sharedPreferences.all.keys.firstOrNull {
+            it.startsWith("game_state_${today}_${mode.name}_level_") && it.endsWith("_duration")
+        }
+        val duration = sharedPreferences.getLong("${resultKey}_duration", -1L).takeIf { it > 0 }
+            ?: oldKey?.let { sharedPreferences.getLong(it, -1L).takeIf { value -> value > 0 } }
+        val number = sharedPreferences.getInt("${resultKey}_level", 0).takeIf { it > 0 }
+            ?: oldKey?.substringAfter("_level_")?.substringBefore("_duration")?.toIntOrNull()
+        return DailyResult(won, attempts, today, duration, number)
     }
 
     /**
@@ -130,18 +139,19 @@ class DailyLevelManager(
         mode: GameMode,
         won: Boolean,
         attempts: Int,
-        sharedPreferences: SharedPreferences
+        sharedPreferences: SharedPreferences,
+        day: LocalDate = app.matjlergame.domain.model.PlayerPeriods.today()
     ) {
-        val today = LocalDate.now().toString()
+        val today = day.toString()
         val resultKey = "result_${mode.name}_$today"
+        if (sharedPreferences.contains("${resultKey}_attempts")) return
 
         sharedPreferences.edit().apply {
             putBoolean("${resultKey}_won", won)
             putInt("${resultKey}_attempts", attempts)
-            apply()
+            putString("last_played_${mode.name}", today)
+            commit()
         }
-
-        markAsPlayed(mode, sharedPreferences)
 
         Log.d(TAG, "💾 Résultat sauvegardé pour $mode: won=$won, attempts=$attempts")
     }
@@ -164,8 +174,11 @@ class DailyLevelManager(
     fun updateStatistics(
         mode: GameMode,
         won: Boolean,
-        sharedPreferences: SharedPreferences
+        sharedPreferences: SharedPreferences,
+        day: LocalDate = app.matjlergame.domain.model.PlayerPeriods.today()
     ) {
+        val marker = "stats_recorded_${mode.name}_$day"
+        if (sharedPreferences.getBoolean(marker, false)) return
         val stats = getStatistics(mode, sharedPreferences)
 
         val newPlayed = stats.totalPlayed + 1
@@ -174,6 +187,7 @@ class DailyLevelManager(
         val newMaxStreak = maxOf(stats.maxStreak, newStreak)
 
         sharedPreferences.edit().apply {
+            putBoolean(marker, true)
             putInt("stats_${mode.name}_played", newPlayed)
             putInt("stats_${mode.name}_won", newWon)
             putInt("stats_${mode.name}_streak", newStreak)
@@ -200,7 +214,10 @@ class DailyLevelManager(
 
 data class DailyResult(
     val won: Boolean,
-    val attempts: Int
+    val attempts: Int,
+    val day: String = app.matjlergame.domain.model.PlayerPeriods.today().toString(),
+    val durationMs: Long? = null,
+    val levelNumber: Int? = null
 )
 
 data class Statistics(

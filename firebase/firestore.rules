@@ -1,0 +1,43 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Global leaderboards, written directly by the app without Firebase Auth (free Spark plan).
+    // One document per player and board: leaderboards/{day|week|month}_{EASY|MEDIUM|HARD|ALL}_{period}/entries/{playerUuid}.
+    // ALL = general board, the three difficulties added together.
+    match /leaderboards/{board}/entries/{playerId} {
+      allow read: if true;
+      allow create, update: if validBoard(board)
+        && playerId.matches('^[0-9a-f-]{36}$')
+        && validEntry(request.resource.data, board)
+        // Never lower a score; same win count means only the profile (name/avatar) may change.
+        && (resource == null
+          || request.resource.data.correctCount > resource.data.correctCount
+          || (request.resource.data.correctCount == resource.data.correctCount
+            && request.resource.data.totalMs == resource.data.totalMs));
+      allow delete: if false;
+    }
+    match /{document=**} { allow read, write: if false; }
+
+    function validBoard(board) {
+      return board.matches('^day_(EASY|MEDIUM|HARD|ALL)_[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+        || board.matches('^week_(EASY|MEDIUM|HARD|ALL)_[0-9]{4}-W[0-9]{2}$')
+        || board.matches('^month_(EASY|MEDIUM|HARD|ALL)_[0-9]{4}-[0-9]{2}$');
+    }
+    // One win per difficulty and per day: 1/7/31 per difficulty, three times that for ALL.
+    function maxWins(board) {
+      let base = board.matches('^day_.*') ? 1 : (board.matches('^week_.*') ? 7 : 31);
+      return board.matches('^[a-z]+_ALL_.*') ? base * 3 : base;
+    }
+    function validEntry(data, board) {
+      return data.keys().hasOnly(['name', 'avatar', 'correctCount', 'totalMs', 'updatedAt'])
+        && data.keys().hasAll(['name', 'avatar', 'correctCount', 'totalMs', 'updatedAt'])
+        && data.name is string && data.name.size() >= 2 && data.name.size() <= 24
+        && data.avatar is int && data.avatar >= 0 && data.avatar < 56
+        && data.correctCount is int && data.correctCount >= 1
+        && data.correctCount <= maxWins(board)
+        // At most 48 hours per win.
+        && data.totalMs is int && data.totalMs >= data.correctCount && data.totalMs <= data.correctCount * 172800000
+        && data.updatedAt == request.time;
+    }
+  }
+}

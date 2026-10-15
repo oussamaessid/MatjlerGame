@@ -13,3 +13,13 @@
 .externalNativeBuild
 .cxx
 local.properties
+
+# Firebase owner configuration and local tooling
+/app/google-services.json
+/firebase/functions/node_modules/
+/firebase/.firebase/
+/firebase/*-debug.log
+
+# Kotlin build error logs
+.kotlin/
+/google-services.json

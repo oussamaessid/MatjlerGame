@@ -1,6 +1,9 @@
 package app.matjlergame.presentation.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
@@ -22,7 +25,9 @@ fun DailyResultDialog(
     mode: GameMode,
     result: DailyResult,
     statistics: Statistics,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    playerName: String = "Joueur",
+    playerAvatar: Int = app.matjlergame.domain.model.PlayerAvatars.DEFAULT
 ) {
     val modeColor = when(mode) {
         GameMode.EASY -> Color(0xFF4CAF50)
@@ -36,10 +41,12 @@ fun DailyResultDialog(
         GameMode.HARD -> "DIFFICILE"
     }
 
+    val maxHeight = (LocalConfiguration.current.screenHeightDp * 0.9f).dp
     Dialog(onDismissRequest = onDismiss) {
         Card(
             modifier = Modifier
                 .fillMaxWidth()
+                .heightIn(max = maxHeight)
                 .padding(16.dp),
             shape = RoundedCornerShape(20.dp),
             colors = CardDefaults.cardColors(
@@ -49,6 +56,7 @@ fun DailyResultDialog(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
                     .padding(24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -109,6 +117,16 @@ fun DailyResultDialog(
                         textAlign = TextAlign.Center
                     )
                 }
+
+                if (result.durationMs != null) Text("⏱ " + app.matjlergame.domain.model.GameTimer.format(result.durationMs),
+                    fontSize = 22.sp, fontWeight = FontWeight.Bold, color = modeColor)
+                ShareResultButtons(app.matjlergame.sharing.ShareResult(
+                    game = "Equal To", player = playerName, day = result.day,
+                    category = "Mode ${modeName.lowercase().replaceFirstChar { it.uppercaseChar() }}" +
+                        (result.levelNumber?.let { " · Niveau $it" } ?: ""),
+                    won = result.won, attempts = result.attempts, maxAttempts = if (result.attempts > 5) result.attempts else 5,
+                    durationMs = result.durationMs,
+                    avatarResource = AvatarGallery.icons.getOrElse(playerAvatar) { AvatarGallery.icons[11] }))
 
                 Divider(color = Color(0xFFE2E8F0))
 

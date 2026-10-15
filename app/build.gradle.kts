@@ -68,3 +68,17 @@ dependencies {
     implementation("androidx.fragment:fragment-ktx:1.8.5")
 
 }
+// Keep the Firebase project optional until the owner provides its real Android config.
+val firebaseAssets = layout.buildDirectory.dir("generated/firebaseAssets")
+val prepareFirebaseConfig by tasks.registering {
+    inputs.files(layout.projectDirectory.file("google-services.json"))
+    outputs.dir(firebaseAssets)
+    doLast {
+        val destination = firebaseAssets.get().file("google-services.json").asFile
+        destination.parentFile.mkdirs()
+        val source = layout.projectDirectory.file("google-services.json").asFile
+        if (source.exists()) source.copyTo(destination, overwrite = true) else destination.delete()
+    }
+}
+android.sourceSets.getByName("main").assets.srcDir(firebaseAssets)
+tasks.named("preBuild").configure { dependsOn(prepareFirebaseConfig) }
