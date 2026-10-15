@@ -335,8 +335,21 @@ fun MathlerGameApp(
                 )
             }
 
-            DisposableEffect(gameViewModel) {
-                onDispose { gameViewModel.close() }
+            val lifecycleOwner = androidx.compose.ui.platform.LocalLifecycleOwner.current
+            DisposableEffect(gameViewModel, lifecycleOwner) {
+                // The chronometer only runs while the game screen is visible.
+                val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+                    when (event) {
+                        androidx.lifecycle.Lifecycle.Event.ON_STOP  -> gameViewModel.pauseTimer()
+                        androidx.lifecycle.Lifecycle.Event.ON_START -> gameViewModel.resumeTimer()
+                        else -> Unit
+                    }
+                }
+                lifecycleOwner.lifecycle.addObserver(observer)
+                onDispose {
+                    lifecycleOwner.lifecycle.removeObserver(observer)
+                    gameViewModel.close()
+                }
             }
             GameScreen(
                 level       = level,

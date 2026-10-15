@@ -13,7 +13,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
 /** Device-local guest store. Never represents these scores as server-verified. */
-class PlayerRepository(private val prefs: SharedPreferences, val firebase: FirebasePlayers? = null) {
+class PlayerRepository(private val prefs: SharedPreferences, val firebase: PlayerCloud? = null) {
     init {
         if (!prefs.contains("player_id")) {
             val id = UUID.randomUUID().toString()
@@ -25,8 +25,16 @@ class PlayerRepository(private val prefs: SharedPreferences, val firebase: Fireb
             // Only migrate the old automatic avatar; preserve personalized profiles.
             check(prefs.edit().putInt("player_avatar", PlayerAvatars.DEFAULT).commit())
         }
+        // Earlier versions marked scores as sent when the API key was blocked; send them all again once.
+        if (!prefs.getBoolean("sync_reset_v2", false)) {
+            val edit = prefs.edit()
+            prefs.all.keys.filter { it.startsWith("synced_") }.forEach { edit.remove(it) }
+            edit.putBoolean("sync_reset_v2", true).apply()
+        }
     }
     var currentProfile by androidx.compose.runtime.mutableStateOf(profile())
+        private set
+    var syncError by androidx.compose.runtime.mutableStateOf<String?>(null)
         private set
     val needsSetup get() = !prefs.getBoolean("profile_setup_complete", false)
     fun completeSetup() { prefs.edit().putBoolean("profile_setup_complete", true).apply() }
@@ -41,11 +49,10 @@ class PlayerRepository(private val prefs: SharedPreferences, val firebase: Fireb
         if (saved) currentProfile = profile()
         return saved
     }
-    @Synchronized
-    fun start(mode: GameMode, day: LocalDate): Long {
-        val key = "start_${day}_${mode.name}"
-        if (!prefs.contains(key)) check(prefs.edit().putLong(key, System.currentTimeMillis()).commit())
-        return prefs.getLong(key, System.currentTimeMillis())
+    /** Time already played on today's game; time spent away from the game screen is not included. */
+    fun playedTime(mode: GameMode, day: LocalDate): Long = prefs.getLong("played_${day}_${mode.name}", 0L)
+    fun savePlayedTime(mode: GameMode, day: LocalDate, durationMs: Long) {
+        prefs.edit().putLong("played_${day}_${mode.name}", durationMs.coerceAtLeast(0)).apply()
     }
     @Synchronized
     fun record(mode: GameMode, day: LocalDate, won: Boolean, durationMs: Long): Boolean {
@@ -71,11 +78,17 @@ class PlayerRepository(private val prefs: SharedPreferences, val firebase: Fireb
      * failures are retried at the next launch, game end or leaderboard visit.
      */
     suspend fun syncScores() {
-        if (!globalEnabled) return
+        if (!globalEnabled) {
+            syncError = "Configuration du classement absente de cette version. Mettez l’application à jour."
+            return
+        }
         syncLock.withLock {
+            syncError = null
             val today = PlayerPeriods.today()
-            // Yesterday too, so a win sent after midnight (or offline) still reaches its period.
-            val days = listOf(today, today.minusDays(1))
+            // Retry every saved period, even after several days offline.
+            val days = (listOf(today) + prefs.all.filterKeys { it.startsWith("score_") }.values.mapNotNull {
+                runCatching { LocalDate.parse(JSONObject(it as String).getString("day")) }.getOrNull()
+            }).distinct()
             val boards = linkedMapOf<String, RankingEntry>()
             // null = general board, all three difficulties together.
             for (mode in listOf<GameMode?>(null) + GameMode.entries) for (period in RankingPeriod.entries) {
@@ -94,10 +107,11 @@ class PlayerRepository(private val prefs: SharedPreferences, val firebase: Fireb
                         .put("correctCount", JSONObject().put("integerValue", entry.correct.toString()))
                         .put("totalMs", JSONObject().put("integerValue", entry.durationMs.toString()))))
                 } catch (e: CancellationException) { throw e }
-                catch (e: FirebaseRequestException) {
-                    // Rejected by the rules (e.g. server already holds a better score): nothing to retry.
-                    if (e.status != "PERMISSION_DENIED" && e.status != "INVALID_ARGUMENT") return
-                } catch (_: Exception) { return }
+                catch (e: Exception) {
+                    // A rejected request is never acknowledged as a successful synchronization.
+                    syncError = app.matjlergame.presentation.model.playerServiceMessage(e)
+                    return
+                }
                 prefs.edit().putString("synced_$board", signature).apply()
             }
         }
@@ -107,50 +121,86 @@ class PlayerRepository(private val prefs: SharedPreferences, val firebase: Fireb
         syncScores()
         return true
     }
-    /** Top players of the current period. Never throws: falls back to the last cached page, then to an empty one. */
-    suspend fun globalRanking(range: RankingPeriod, mode: GameMode?, cursor: JSONObject? = null): JSONObject {
+    /**
+     * The player's neighbourhood in the current period: up to 2 players ahead, the player, up to 2 behind,
+     * each with its global rank ("rank"). A player not ranked yet gets the top of the board instead.
+     * Falls back to the last cached result when offline.
+     */
+    suspend fun globalRanking(range: RankingPeriod, mode: GameMode?): JSONObject {
         val period = range.id(PlayerPeriods.today())
         val board = boardId(range, mode, period)
         val empty = JSONObject().put("period", period).put("mode", mode?.name ?: ALL).put("entries", JSONArray())
-        if (!globalEnabled) return empty
+        if (!globalEnabled) throw FirebaseRequestException("MISSING_APP_CONFIGURATION", "FAILED_PRECONDITION")
+        val cloud = firebase!!
+        val parent = "leaderboards/$board"
         return try {
-            val query = JSONObject()
-                .put("from", JSONArray().put(JSONObject().put("collectionId", "entries")))
-                .put("orderBy", JSONArray().put(order("correctCount", "DESCENDING"))
-                    .put(order("totalMs", "ASCENDING")).put(order("__name__", "ASCENDING")))
-                .put("limit", PAGE_SIZE)
-            if (cursor != null) query.put("startAt", JSONObject().put("before", false).put("values", JSONArray()
-                .put(JSONObject().put("integerValue", cursor.getLong("correctCount").toString()))
-                .put(JSONObject().put("integerValue", cursor.getLong("totalMs").toString()))
-                .put(JSONObject().put("referenceValue", cursor.getString("document")))))
-            val documents = firebase!!.query("leaderboards/$board", query)
+            val me = cloud.documentName("$parent/entries/${profile().id}")
+            val own = cloud.query(parent, entriesQuery().put("where", JSONObject().put("fieldFilter", JSONObject()
+                .put("field", JSONObject().put("fieldPath", "__name__")).put("op", "EQUAL")
+                .put("value", JSONObject().put("referenceValue", me)))).put("limit", 1)).firstOrNull()
+            val rows: List<Pair<Int, JSONObject>> = if (own == null) {
+                cloud.query(parent, ranked().put("limit", NEIGHBOURS * 2 + 1)).mapIndexed { i, doc -> i + 1 to doc }
+            } else {
+                val cursor = cursorOf(own)
+                val ahead = cloud.count(parent, ranked().put("endAt", JSONObject().put("before", true).put("values", cursor))).toInt()
+                val above = playersAbove(parent, cursor, ahead)
+                val below = cloud.query(parent, ranked().put("limit", NEIGHBOURS)
+                    .put("startAt", JSONObject().put("before", false).put("values", cursor)))
+                val rank = ahead + 1
+                above.mapIndexed { i, doc -> rank - above.size + i to doc } + (rank to own) +
+                    below.mapIndexed { i, doc -> rank + 1 + i to doc }
+            }
             val entries = JSONArray()
-            documents.forEach { document ->
+            rows.forEach { (rank, document) ->
                 val fields = document.getJSONObject("fields")
-                entries.put(JSONObject().put("uid", document.getString("name").substringAfterLast('/'))
+                entries.put(JSONObject().put("uid", document.getString("name").substringAfterLast('/')).put("rank", rank)
                     .put("name", fields.getJSONObject("name").getString("stringValue"))
                     .put("avatar", fields.optJSONObject("avatar")?.optString("integerValue")?.toIntOrNull() ?: PlayerAvatars.DEFAULT)
                     .put("correctCount", fields.getJSONObject("correctCount").getString("integerValue").toInt())
                     .put("totalMs", fields.getJSONObject("totalMs").getString("integerValue").toLong()))
             }
-            val last = entries.length() - 1
-            val page = empty.put("entries", entries).put("cursor", if (documents.size < PAGE_SIZE) JSONObject.NULL else
-                JSONObject().put("correctCount", entries.getJSONObject(last).getInt("correctCount"))
-                    .put("totalMs", entries.getJSONObject(last).getLong("totalMs"))
-                    .put("document", documents[last].getString("name")))
-            if (cursor == null) prefs.edit().putString("cache_$board", page.toString()).apply()
+            val page = empty.put("entries", entries).put("ranked", own != null)
+            prefs.edit().putString("cache_$board", page.toString()).apply()
             page
         } catch (e: CancellationException) { throw e }
-        catch (_: Exception) {
-            if (cursor != null) empty
-            else prefs.getString("cache_$board", null)?.let { runCatching { JSONObject(it) }.getOrNull() } ?: empty
+        catch (e: Exception) {
+            prefs.getString("cache_$board", null)?.let { saved ->
+                runCatching { JSONObject(saved).put("cached", true).put("problem", app.matjlergame.presentation.model.playerServiceMessage(e)) }.getOrNull()
+            } ?: throw e
         }
+    }
+
+    /** The [NEIGHBOURS] players just ahead, best first. */
+    private suspend fun playersAbove(parent: String, cursor: JSONArray, ahead: Int): List<JSONObject> {
+        if (ahead == 0) return emptyList()
+        val cloud = firebase!!
+        return try {
+            // Reverse order needs the (correctCount ASC, totalMs DESC) index from firebase/firestore.indexes.json.
+            cloud.query(parent, entriesQuery().put("orderBy", JSONArray().put(order("correctCount", "ASCENDING"))
+                .put(order("totalMs", "DESCENDING")).put(order("__name__", "DESCENDING")))
+                .put("startAt", JSONObject().put("before", false).put("values", cursor)).put("limit", NEIGHBOURS)).reversed()
+        } catch (e: FirebaseRequestException) {
+            if (e.status != "FAILED_PRECONDITION") throw e
+            // Index not built yet: skip to the same rows in the normal order (costs the skipped reads).
+            cloud.query(parent, ranked().put("offset", (ahead - NEIGHBOURS).coerceAtLeast(0))
+                .put("limit", minOf(ahead, NEIGHBOURS)))
+        }
+    }
+    private fun entriesQuery() = JSONObject().put("from", JSONArray().put(JSONObject().put("collectionId", "entries")))
+    /** Board order: most wins, then shortest total time, then player id for ties. */
+    private fun ranked() = entriesQuery().put("orderBy", JSONArray().put(order("correctCount", "DESCENDING"))
+        .put(order("totalMs", "ASCENDING")).put(order("__name__", "ASCENDING")))
+    private fun cursorOf(document: JSONObject): JSONArray {
+        val fields = document.getJSONObject("fields")
+        return JSONArray().put(fields.getJSONObject("correctCount")).put(fields.getJSONObject("totalMs"))
+            .put(JSONObject().put("referenceValue", document.getString("name")))
     }
     private fun order(field: String, direction: String) =
         JSONObject().put("field", JSONObject().put("fieldPath", field)).put("direction", direction)
 
     companion object {
-        private const val PAGE_SIZE = 50
+        /** Players shown on each side of the current player. */
+        private const val NEIGHBOURS = 2
         const val ALL = "ALL"
         /** Firestore board id, e.g. day_HARD_2026-10-14, week_ALL_2026-W42 or month_EASY_2026-10. */
         fun boardId(period: RankingPeriod, mode: GameMode?, id: String) = "${period.key}_${mode?.name ?: ALL}_$id"

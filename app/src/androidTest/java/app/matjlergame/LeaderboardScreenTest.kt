@@ -78,6 +78,17 @@ class LeaderboardScreenTest {
         compose.onNodeWithText("Un pseudo très long à vérifier").assertIsDisplayed()
     }
 
+    @Test fun connectionFailureIsNotShownAsAnEmptyBoard() {
+        var retries=0
+        compose.setContent { MaterialTheme {
+            LeaderboardLayout(LeaderboardViewState(problem="Connexion impossible. Votre résultat est conservé."), {}, {}, {}, { retries++ }, {})
+        } }
+        compose.onNodeWithTag("leaderboard_list").performScrollToNode(hasText("Synchronisation en attente"))
+        compose.onNodeWithText("À vous de jouer !").assertDoesNotExist()
+        compose.onNodeWithText("Réessayer").performScrollTo().performClick()
+        assertEquals(1,retries)
+    }
+
     private fun screenshot(name: String) {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val file = File(context.getExternalFilesDir(null), name)

@@ -12,19 +12,32 @@ import java.net.URL
 import java.net.URLEncoder
 import java.security.MessageDigest
 
-class FirebaseRequestException(message: String, val status: String) : Exception(message)
+class FirebaseRequestException(message: String, val status: String, val reason: String? = null) : Exception(message)
+
+/** Transport contract also allows testing network failures without changing the real backend. */
+interface PlayerCloud {
+    val configured: Boolean
+    suspend fun write(documents: Map<String, JSONObject>)
+    suspend fun query(parentPath: String, structuredQuery: JSONObject): List<JSONObject>
+    /** Number of documents matching the query, without downloading them. */
+    suspend fun count(parentPath: String, structuredQuery: JSONObject): Long = query(parentPath, structuredQuery).size.toLong()
+    /** Full Firestore name of a document, as used by cursors and __name__ filters. */
+    fun documentName(path: String): String = path
+}
 
 /**
  * Firestore REST client without Firebase Auth, so it works on the free Spark plan.
  * Access is controlled by firebase/firestore.rules; reuses the game's HTTP/JSON stack.
  */
-class FirebasePlayers(context: Context) {
+class FirebasePlayers(context: Context) : PlayerCloud {
     private val assets = context.assets
     private val packageName = context.packageName
     private val certificate by lazy { runCatching { signingSha1(context) }.getOrNull() }
-    val configured = assets.list("")?.contains("google-services.json") == true
+    private val hasAsset = assets.list("")?.contains("google-services.json") == true
+    // Built-in config: builds from a fresh checkout (google-services.json is git-ignored) keep the leaderboard.
+    override val configured = true
     private val config by lazy {
-        if (!configured) throw FirebaseRequestException("MISSING_APP_CONFIGURATION", "FAILED_PRECONDITION")
+        if (!hasAsset) return@lazy Pair(PROJECT_ID, API_KEY)
         val json = JSONObject(assets.open("google-services.json").bufferedReader().use { it.readText() })
         val clients = json.getJSONArray("client")
         val client = (0 until clients.length()).map { clients.getJSONObject(it) }.firstOrNull {
@@ -54,14 +67,20 @@ class FirebasePlayers(context: Context) {
                 val error = runCatching { JSONArray(raw).getJSONObject(0) }.getOrNull()
                     ?: runCatching { JSONObject(raw) }.getOrNull()
                 val status = error?.optJSONObject("error")?.optString("status")?.takeIf { it.isNotBlank() } ?: "UNAVAILABLE"
-                throw FirebaseRequestException(error?.optJSONObject("error")?.optString("message")?.take(180) ?: "HTTP_$code", status)
+                val payload = error?.optJSONObject("error")
+                val details = payload?.optJSONArray("details")
+                val reason = (0 until (details?.length() ?: 0)).mapNotNull {
+                    details?.optJSONObject(it)?.optString("reason")?.takeIf { value -> value.isNotBlank() }
+                }.firstOrNull()
+                android.util.Log.w("FirebasePlayers", "HTTP $code $status reason=${reason ?: "unspecified"}")
+                throw FirebaseRequestException(payload?.optString("message")?.take(180) ?: "HTTP_$code", status, reason)
             }
             return raw
         } finally { connection.disconnect() }
     }
 
     /** Atomically replaces each document and stamps updatedAt with the server time. */
-    suspend fun write(documents: Map<String, JSONObject>) = withContext(Dispatchers.IO) {
+    override suspend fun write(documents: Map<String, JSONObject>) = withContext(Dispatchers.IO) {
         val writes = JSONArray()
         documents.forEach { (path, fields) ->
             writes.put(JSONObject()
@@ -74,14 +93,23 @@ class FirebasePlayers(context: Context) {
     }
 
     /** Runs a structured query on parentPath's subcollection and returns the documents found. */
-    suspend fun query(parentPath: String, structuredQuery: JSONObject): List<JSONObject> = withContext(Dispatchers.IO) {
+    override suspend fun query(parentPath: String, structuredQuery: JSONObject): List<JSONObject> = withContext(Dispatchers.IO) {
         val raw = post("https://firestore.googleapis.com/v1/$database/documents/$parentPath:runQuery",
             JSONObject().put("structuredQuery", structuredQuery).toString())
         val rows = JSONArray(raw)
         (0 until rows.length()).mapNotNull { rows.getJSONObject(it).optJSONObject("document") }
     }
 
-    fun documentName(path: String) = "$database/documents/$path"
+    /** COUNT aggregation: billed one read per 1000 matching documents. */
+    override suspend fun count(parentPath: String, structuredQuery: JSONObject): Long = withContext(Dispatchers.IO) {
+        val raw = post("https://firestore.googleapis.com/v1/$database/documents/$parentPath:runAggregationQuery",
+            JSONObject().put("structuredAggregationQuery", JSONObject().put("structuredQuery", structuredQuery)
+                .put("aggregations", JSONArray().put(JSONObject().put("alias", "n").put("count", JSONObject())))).toString())
+        JSONArray(raw).getJSONObject(0).getJSONObject("result").getJSONObject("aggregateFields")
+            .getJSONObject("n").getString("integerValue").toLong()
+    }
+
+    override fun documentName(path: String) = "$database/documents/$path"
 
     private fun signingSha1(context: Context): String? {
         val pm = context.packageManager
@@ -91,5 +119,11 @@ class FirebasePlayers(context: Context) {
         else pm.getPackageInfo(packageName, PackageManager.GET_SIGNATURES).signatures
         val signature = signatures?.firstOrNull() ?: return null
         return MessageDigest.getInstance("SHA-1").digest(signature.toByteArray()).joinToString("") { "%02X".format(it) }
+    }
+
+    private companion object {
+        // Same values as app/google-services.json (project equal-to-81b8f); public in every APK anyway.
+        const val PROJECT_ID = "equal-to-81b8f"
+        const val API_KEY = "AIzaSyAG6PSBr1eUll_VBKLgiBgzTGtPGk8Nf0g"
     }
 }

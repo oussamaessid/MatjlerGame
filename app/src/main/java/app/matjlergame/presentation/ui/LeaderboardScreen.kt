@@ -51,6 +51,8 @@ internal data class LeaderboardViewState(
     val players: List<LeaderboardPlayer> = emptyList(),
     val loading: Boolean = false,
     val hasMore: Boolean = false,
+    val problem: String? = null,
+    val cached: Boolean = false,
     val meName: String = "Joueur",
     val meAvatar: Int = app.matjlergame.domain.model.PlayerAvatars.DEFAULT,
     val me: String = ""
@@ -74,29 +76,26 @@ private fun LeaderboardRoute(
     var state by remember { mutableStateOf(LeaderboardViewState(mode, range, range.id(PlayerPeriods.today()), loading = true,
         me = repository.currentProfile.id, meName = repository.currentProfile.name, meAvatar = repository.currentProfile.avatar)) }
     var revision by remember { mutableStateOf(0) }
-    var append by remember { mutableStateOf(false) }
-    var cursor by remember { mutableStateOf<JSONObject?>(null) }
     LaunchedEffect(revision) {
-        state = state.copy(loading = true)
+        state = state.copy(loading = true, problem = null)
         try {
-            // Silent: network problems only leave the cached or empty list on screen.
-            if (!append) repository.syncScores()
-            val page = repository.globalRanking(range, mode, if (append) cursor else null)
+            // Keep pending scores and distinguish unavailable service from an empty board.
+            repository.syncScores()
+            val page = repository.globalRanking(range, mode)
             check(page.getString("mode") == (mode?.name ?: PlayerRepository.ALL))
             val entries = page.getJSONArray("entries")
-            val incoming = (0 until entries.length()).map { index ->
+            val players = (0 until entries.length()).map { index ->
                 val row = entries.getJSONObject(index)
                 LeaderboardPlayer(row.getString("uid"), row.getString("name"), row.getInt("avatar"),
-                    row.getInt("correctCount"), row.getLong("totalMs"))
+                    row.getInt("correctCount"), row.getLong("totalMs"), row.optInt("rank", index + 1))
             }
-            cursor = page.optJSONObject("cursor")
-            state = state.copy(players = if (append) (state.players + incoming).distinctBy { it.uid } else incoming,
-                period = page.getString("period"), loading = false, hasMore = cursor != null)
+            state = state.copy(players = players, period = page.getString("period"), loading = false,
+                cached = page.optBoolean("cached"),
+                problem = page.optString("problem").takeIf { it.isNotBlank() } ?: repository.syncError)
         } catch (e: CancellationException) { throw e }
-        catch (_: Exception) { state = state.copy(loading = false, hasMore = false) }
+        catch (e: Exception) { state = state.copy(loading = false, hasMore = false, problem = app.matjlergame.presentation.model.playerServiceMessage(e)) }
     }
-    LeaderboardLayout(state, onBack, onPeriod, onMode,
-        onRefresh = { append = false; revision++ }, onLoadMore = { append = true; revision++ })
+    LeaderboardLayout(state, onBack, onPeriod, onMode, onRefresh = { revision++ }, onLoadMore = { })
 }
 
 @Composable
@@ -138,6 +137,7 @@ internal fun LeaderboardLayout(
             }
             item {
                 val ownIndex = state.players.indexOfFirst { it.uid == state.me }
+                val ownRank = state.players.getOrNull(ownIndex)?.let { it.rank.takeIf { rank -> rank > 0 } ?: ownIndex + 1 }
                 Surface(shape = RoundedCornerShape(22.dp), color = Color.White, shadowElevation = 4.dp) {
                     Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -150,7 +150,7 @@ internal fun LeaderboardLayout(
                                 else "Chaque victoire compte", color = RankingMuted, fontSize = 12.sp)
                         }
                         if (ownIndex >= 0) Surface(shape = RoundedCornerShape(14.dp), color = Color(0xFFFFF1CB)) {
-                            Text("#${ownIndex + 1}", Modifier.padding(12.dp), color = Color(0xFF996716), fontWeight = FontWeight.ExtraBold, fontSize = 20.sp)
+                            Text("#$ownRank", Modifier.padding(12.dp), color = Color(0xFF996716), fontWeight = FontWeight.ExtraBold, fontSize = 20.sp)
                         }
                     }
                 }
@@ -185,14 +185,22 @@ internal fun LeaderboardLayout(
             }
             item {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Text("Les champions", color = RankingInk, fontSize = 19.sp, fontWeight = FontWeight.Bold,
+                    Text(if (state.players.any { it.uid == state.me }) "Votre position" else "Les champions", color = RankingInk, fontSize = 19.sp, fontWeight = FontWeight.Bold,
                         modifier = Modifier.weight(1f))
                     if (!state.loading) {
                         Text("${state.players.size} affiché${if (state.players.size == 1) "" else "s"}", color = RankingMuted, fontSize = 12.sp)
                     }
                 }
             }
+            if (state.problem != null) item {
+                RankingStateCard(if (state.cached) "Classement enregistré" else "Synchronisation en attente",
+                    state.problem, action = onRefresh)
+            }
+            if (state.cached) item {
+                Text("Derniers résultats chargés · actualisation impossible", color = RankingMuted, fontSize = 12.sp)
+            }
             when {
+                state.players.isEmpty() && state.problem != null -> { }
                 state.loading && state.players.isEmpty() -> item {
                     RankingStateCard("Le classement arrive…", "Nous recherchons les joueurs de cette période.", loading = true)
                 }
@@ -202,7 +210,8 @@ internal fun LeaderboardLayout(
                         action = onRefresh)
                 }
                 else -> {
-                    if (state.players.size >= 3) item { RankingPodium(state.players.take(3)) }
+                    // Podium only when the rows really are the top 3 of the board.
+                    if (state.players.size >= 3 && state.players[0].rank <= 1) item { RankingPodium(state.players.take(3)) }
                     item {
                         Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp)) {
                             Text("RANG / JOUEUR", Modifier.weight(1f), color = RankingMuted, fontSize = 10.sp, fontWeight = FontWeight.Bold)
@@ -210,7 +219,7 @@ internal fun LeaderboardLayout(
                         }
                     }
                     itemsIndexed(state.players, key = { _, player -> player.uid }) { index, player ->
-                        RankingPlayerRow(index + 1, player, player.uid == state.me)
+                        RankingPlayerRow(player.rank.takeIf { it > 0 } ?: (index + 1), player, player.uid == state.me)
                     }
                     if (state.hasMore) item {
                         OutlinedButton(onClick = onLoadMore, enabled = !state.loading, modifier = Modifier.fillMaxWidth()) {
@@ -226,7 +235,7 @@ internal fun LeaderboardLayout(
                         Text("Les victoires d’abord, la rapidité ensuite.", color = RankingInk, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                         Text("À égalité, le temps total le plus court passe devant. Général additionne Facile, Moyen et Difficile.",
                             color = RankingMuted, fontSize = 12.sp)
-                        Text("Périodes à l’heure de Tunis · pauses comprises", color = RankingMuted, fontSize = 10.sp)
+                        Text("Périodes à l’heure de Tunis · seul le temps passé dans la partie compte", color = RankingMuted, fontSize = 10.sp)
                     }
                 }
             }

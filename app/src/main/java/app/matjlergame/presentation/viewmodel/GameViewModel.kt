@@ -30,10 +30,9 @@ class GameViewModel(
 ) : ViewModel() {
 
     private val playDay = app.matjlergame.domain.model.PlayerPeriods.today()
-    private val startedAt = mode?.let { playerRepository?.start(it, playDay) } ?: System.currentTimeMillis()
     private var submittedDuration = 0L
-    private val responseTimer = app.matjlergame.domain.model.GameTimer(startedAt,
-        System.currentTimeMillis(), android.os.SystemClock.elapsedRealtime())
+    private val responseTimer = app.matjlergame.domain.model.GameTimer(
+        mode?.let { playerRepository?.playedTime(it, playDay) } ?: 0L, android.os.SystemClock.elapsedRealtime())
     private val gameStateKey = if (mode != null) {
         "game_state_${playDay}_${mode.name}_level_${level.number}"
     } else {
@@ -58,7 +57,21 @@ class GameViewModel(
         private set
 
     private var isRevealing = false
-    fun close() { viewModelScope.cancel() }
+    fun close() {
+        pauseTimer()
+        viewModelScope.cancel()
+    }
+
+    /** Called when the game screen is left or the app goes to the background: the chronometer stops. */
+    fun pauseTimer() {
+        if (timerStopped) return
+        elapsedTimeMs = responseTimer.pause(android.os.SystemClock.elapsedRealtime())
+        mode?.let { playerRepository?.savePlayedTime(it, playDay, elapsedTimeMs) }
+    }
+
+    fun resumeTimer() {
+        if (!timerStopped) responseTimer.resume(android.os.SystemClock.elapsedRealtime())
+    }
 
     /** Stores the result locally, then pushes it to the global leaderboard in the background, silently. */
     private fun recordResult(won: Boolean, durationMs: Long) {
@@ -176,6 +189,9 @@ class GameViewModel(
         val edit = sharedPreferences.edit().putString(gameStateKey, obj.toString())
             .putLong("${gameStateKey}_duration", submittedDuration.coerceAtLeast(1))
         if (gameState.isWon) edit.commit() else edit.apply()
+        if (!timerStopped) mode?.let {
+            playerRepository?.savePlayedTime(it, playDay, responseTimer.elapsed(android.os.SystemClock.elapsedRealtime()))
+        }
     }
 
     private fun clearSavedState() {
