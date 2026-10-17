@@ -24,9 +24,9 @@ class ShareResultButtonsTest {
             compose.setContent {
                 MaterialTheme { ShareResultButtons(ShareResult("Equal To","Joueur Test","2026-10-15","Mode Facile",true,2,5,42000)) }
             }
-            compose.onNodeWithText("Partager le texte uniquement").performClick()
-            compose.waitUntil(10000) { monitor.hits>=1 }
             compose.onNodeWithText("Partager mon résultat").performClick()
+            compose.waitUntil(10000) { monitor.hits>=1 }
+            compose.onNodeWithText("Partager comme image").performClick()
             compose.waitUntil(15000) { monitor.hits>=2 }
             assertEquals(2,monitor.hits)
         } finally { instrumentation.removeMonitor(monitor) }

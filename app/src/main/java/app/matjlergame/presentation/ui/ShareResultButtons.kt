@@ -34,13 +34,15 @@ fun ShareResultButtons(result: ShareResult) {
         }
     }
     Column(Modifier.fillMaxWidth()) {
-        Button(onClick={share(true)},enabled=!busy,modifier=Modifier.fillMaxWidth()) {
+        // Text sharing keeps the Play Store URL visible and clickable in messaging apps.
+        // A bitmap attachment itself cannot carry a hyperlink, so image sharing is optional.
+        Button(onClick={share(false)},enabled=!busy,modifier=Modifier.fillMaxWidth()) {
             Icon(Icons.Default.Share,contentDescription=null)
             Spacer(Modifier.width(8.dp))
             Text(if(busy) {if(result.english) "Preparing…" else "Préparation…"} else {if(result.english) "Share my result" else "Partager mon résultat"})
         }
-        TextButton(onClick={share(false)},enabled=!busy,modifier=Modifier.fillMaxWidth()) {
-            Text(if(result.english) "Share text only" else "Partager le texte uniquement")
+        TextButton(onClick={share(true)},enabled=!busy,modifier=Modifier.fillMaxWidth()) {
+            Text(if(result.english) "Share as image" else "Partager comme image")
         }
     }
 }
