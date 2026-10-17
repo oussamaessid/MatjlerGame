@@ -16,23 +16,30 @@ service cloud.firestore {
             && request.resource.data.totalMs == resource.data.totalMs));
       allow delete: if false;
     }
-    // Unique player names: names/{hex of the lowercased name} -> owning player id.
-    // Once reserved, a name never changes owner, whatever avatar the other player picks.
+    // Unique name + avatar pairs: names/{hex of the lowercased name}_{avatar} -> owning player id.
+    // The same name stays free with another avatar; once reserved, a pair never changes owner.
+    // Keys without "_{avatar}" are name-only reservations still written by the 1.0.3 app.
     match /names/{key} {
       allow read: if true;
-      allow create: if key.matches('^[0-9a-f]{4,192}$') && validName(request.resource.data);
-      allow update: if validName(request.resource.data)
+      allow create: if validName(request.resource.data) && validKey(key, request.resource.data);
+      allow update: if validName(request.resource.data) && validKey(key, request.resource.data)
         && request.resource.data.playerId == resource.data.playerId;
       allow delete: if false;
     }
     match /{document=**} { allow read, write: if false; }
 
     function validName(data) {
-      return data.keys().hasOnly(['name', 'playerId', 'updatedAt'])
+      return data.keys().hasOnly(['name', 'avatar', 'playerId', 'updatedAt'])
         && data.keys().hasAll(['name', 'playerId', 'updatedAt'])
         && data.name is string && data.name.size() >= 2 && data.name.size() <= 24
         && data.playerId is string && data.playerId.matches('^[0-9a-f-]{36}$')
         && data.updatedAt == request.time;
+    }
+    function validKey(key, data) {
+      return 'avatar' in data
+        ? data.avatar is int && data.avatar >= 0 && data.avatar < 56
+          && key.matches('^[0-9a-f]{4,192}_' + string(data.avatar) + '$')
+        : key.matches('^[0-9a-f]{4,192}$');
     }
 
     function validBoard(board) {

@@ -79,17 +79,19 @@ class PlayerSyncRecoveryTest {
         assertTrue(cached.getBoolean("cached"));assertTrue(cached.has("problem"))
         prefs.edit().clear().commit()
     }
-    @Test fun aNameTakenByAnotherPlayerIsRefusedEvenWithAnotherAvatar() = runBlocking<Unit> {
+    @Test fun aNameIsSharedOnlyWithAnotherAvatar() = runBlocking<Unit> {
         val cloud = NamesCloud()
         val alice = PlayerRepository(prefs(), cloud)
         assertNull(alice.saveGlobalProfile("Alice", 3))
         val other = PlayerRepository(prefs(), cloud)
         val before = other.currentProfile
-        assertEquals(PlayerRepository.NAME_TAKEN, other.saveGlobalProfile(" alice ", 9))
+        assertEquals(PlayerRepository.NAME_TAKEN, other.saveGlobalProfile(" alice ", 3))
         assertEquals(before, other.currentProfile)
-        // The owner keeps the name when changing only the avatar.
+        assertNull(other.saveGlobalProfile(" alice ", 9))
+        // Alice keeps her own pairs and can move to a free avatar, but not to the other player's.
+        assertNull(alice.saveGlobalProfile("Alice", 3))
         assertNull(alice.saveGlobalProfile("Alice", 7))
-        assertNull(other.saveGlobalProfile("Bob", 3))
+        assertEquals(PlayerRepository.NAME_TAKEN, alice.saveGlobalProfile("ALICE", 9))
     }
     @Test fun offlineNameCheckDoesNotSaveTheProfile() = runBlocking<Unit> {
         val cloud = NamesCloud().apply { offline = true }

@@ -84,9 +84,9 @@ class PlayerRepository(private val prefs: SharedPreferences, val firebase: Playe
         }
         syncLock.withLock {
             syncError = null
-            // Players from earlier versions claim their name once; a name already taken is left as is.
+            // Players from earlier versions claim their name and avatar once; a pair already taken is left as is.
             val current = profile()
-            if (!needsSetup && current.name != defaultName(current.id)) reserveName(current.name)
+            if (!needsSetup && current.name != defaultName(current.id)) reserveName(current.name, current.avatar)
             val today = PlayerPeriods.today()
             // Retry every saved period, even after several days offline.
             val days = (listOf(today) + prefs.all.filterKeys { it.startsWith("score_") }.values.mapNotNull {
@@ -121,18 +121,19 @@ class PlayerRepository(private val prefs: SharedPreferences, val firebase: Playe
     }
     /** Returns null once saved, otherwise the message to show (name taken, offline…). */
     suspend fun saveGlobalProfile(name: String, avatar: Int): String? {
-        if (globalEnabled) reserveName(name)?.let { return it }
+        if (globalEnabled) reserveName(name, avatar)?.let { return it }
         if (!update(name, avatar)) return "Enregistrement impossible."
         syncScores()
         return null
     }
 
     /**
-     * Claims the name in names/{nameKey} so that no other player can use it, whatever their avatar.
-     * firestore.rules refuse to hand a reserved name to another player id, even on simultaneous requests.
+     * Claims the name and avatar pair in names/{nameKey} so that no other player can use both together;
+     * the same name stays free with another avatar.
+     * firestore.rules refuse to hand a reserved pair to another player id, even on simultaneous requests.
      */
-    suspend fun reserveName(name: String): String? {
-        val key = nameKey(name)
+    suspend fun reserveName(name: String, avatar: Int): String? {
+        val key = nameKey(name, avatar)
         if (prefs.getString("reserved_name", null) == key) return null
         val cloud = firebase!!
         val path = "names/$key"
@@ -143,6 +144,7 @@ class PlayerRepository(private val prefs: SharedPreferences, val firebase: Playe
             if (takenByOther(cloud.read(path))) return NAME_TAKEN
             cloud.write(mapOf(path to JSONObject()
                 .put("name", JSONObject().put("stringValue", name.trim()))
+                .put("avatar", JSONObject().put("integerValue", avatar.toString()))
                 .put("playerId", JSONObject().put("stringValue", me))))
         } catch (e: CancellationException) { throw e }
         catch (e: Exception) {
@@ -236,15 +238,15 @@ class PlayerRepository(private val prefs: SharedPreferences, val firebase: Playe
         /** Players shown on each side of the current player. */
         private const val NEIGHBOURS = 2
         const val ALL = "ALL"
-        const val NAME_TAKEN = "Ce pseudo est déjà utilisé par un autre joueur. Choisissez-en un autre."
+        const val NAME_TAKEN = "Un autre joueur a déjà ce pseudo avec cet avatar. Changez de pseudo ou d’avatar."
         fun defaultName(id: String) = "Joueur-${id.take(8)}"
         /**
-         * Firestore id shared by every spelling of a name: "Alice", " ALICE " and "alice" collide.
-         * Hex keeps any character (emoji, accents, "/") valid in a document id.
+         * Firestore id shared by every spelling of a name with the same avatar: "Alice", " ALICE " and "alice"
+         * collide, "Alice" with another avatar does not. Hex keeps any character (emoji, accents, "/") valid in a document id.
          */
-        fun nameKey(name: String): String = java.text.Normalizer.normalize(name.trim().replace(Regex("\\s+"), " "),
+        fun nameKey(name: String, avatar: Int): String = java.text.Normalizer.normalize(name.trim().replace(Regex("\\s+"), " "),
             java.text.Normalizer.Form.NFKC).lowercase(java.util.Locale.ROOT)
-            .toByteArray(Charsets.UTF_8).joinToString("") { "%02x".format(it) }
+            .toByteArray(Charsets.UTF_8).joinToString("") { "%02x".format(it) } + "_$avatar"
         /** Firestore board id, e.g. day_HARD_2026-10-14, week_ALL_2026-W42 or month_EASY_2026-10. */
         fun boardId(period: RankingPeriod, mode: GameMode?, id: String) = "${period.key}_${mode?.name ?: ALL}_$id"
     }

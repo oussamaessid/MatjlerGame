@@ -61,10 +61,11 @@ class PlayerProfilePersistenceTest {
     }
 
     @Test fun nameKeyIgnoresCaseAndSpacesButNotTheAvatar() {
-        assertEquals(PlayerRepository.nameKey("Alice"), PlayerRepository.nameKey("  ALICE "))
-        assertEquals(PlayerRepository.nameKey("Ali  ce"), PlayerRepository.nameKey("ali ce"))
-        assertNotEquals(PlayerRepository.nameKey("Alice"), PlayerRepository.nameKey("Alicia"))
-        assertTrue(PlayerRepository.nameKey("Été ⭐/x").matches(Regex("[0-9a-f]+")))
+        assertEquals(PlayerRepository.nameKey("Alice", 3), PlayerRepository.nameKey("  ALICE ", 3))
+        assertEquals(PlayerRepository.nameKey("Ali  ce", 3), PlayerRepository.nameKey("ali ce", 3))
+        assertNotEquals(PlayerRepository.nameKey("Alice", 3), PlayerRepository.nameKey("Alicia", 3))
+        assertNotEquals(PlayerRepository.nameKey("Alice", 3), PlayerRepository.nameKey("Alice", 9))
+        assertTrue(PlayerRepository.nameKey("Été ⭐/x", 55).matches(Regex("[0-9a-f]+_55")))
     }
 
     @Test fun invalidProfileCannotReplaceExistingProfile() {
