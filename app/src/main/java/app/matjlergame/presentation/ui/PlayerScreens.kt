@@ -56,8 +56,8 @@ fun PlayerScreen(repository: PlayerRepository, ranking: Boolean, setup: Boolean 
             PlayerAvatar(avatar, 104.dp, Modifier.align(androidx.compose.ui.Alignment.CenterHorizontally))
             Text("Compte invité • conservé sur cet appareil", style = MaterialTheme.typography.bodySmall)
             OutlinedTextField(value = name, onValueChange = { name = it; edited = true; error = false },
-                label = { Text("Pseudo") }, singleLine = true, isError = !valid, enabled = !saving,
-                supportingText = { Text("De 2 à 24 caractères") }, modifier = Modifier.fillMaxWidth())
+                label = { Text("Pseudo") }, singleLine = true, isError = !valid || error, enabled = !saving,
+                supportingText = { Text(if (error) saveError else "De 2 à 24 caractères, unique parmi les joueurs") }, modifier = Modifier.fillMaxWidth())
             Text("Choisissez votre avatar")
             Text("48 avatars Ludo et 8 avatars classiques", style = MaterialTheme.typography.bodySmall)
             val avatarGridState = rememberLazyGridState(
@@ -85,8 +85,8 @@ fun PlayerScreen(repository: PlayerRepository, ranking: Boolean, setup: Boolean 
                 saving = true
                 scope.launch {
                     try {
-                        if (repository.saveGlobalProfile(name, avatar)) onBack()
-                        else { error = true; saveError = "Enregistrement impossible." }
+                        val problem = repository.saveGlobalProfile(name, avatar)
+                        if (problem == null) onBack() else { error = true; saveError = problem }
                     } finally { saving = false }
                 }
             }, modifier = Modifier.fillMaxWidth()) {

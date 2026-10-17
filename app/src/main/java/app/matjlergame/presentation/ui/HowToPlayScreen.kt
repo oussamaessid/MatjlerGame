@@ -1,5 +1,6 @@
 package app.matjlergame.presentation.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
@@ -24,6 +25,8 @@ import androidx.compose.ui.unit.sp
 fun HowToPlayScreen(
     onBack: () -> Unit
 ) {
+    // The phone's back button returns to the menu instead of closing the app.
+    BackHandler(onBack = onBack)
     val scrollState = rememberScrollState()
 
     Column(

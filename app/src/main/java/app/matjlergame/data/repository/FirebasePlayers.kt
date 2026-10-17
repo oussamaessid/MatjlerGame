@@ -21,6 +21,8 @@ interface PlayerCloud {
     suspend fun query(parentPath: String, structuredQuery: JSONObject): List<JSONObject>
     /** Number of documents matching the query, without downloading them. */
     suspend fun count(parentPath: String, structuredQuery: JSONObject): Long = query(parentPath, structuredQuery).size.toLong()
+    /** One document by path, or null when it does not exist. */
+    suspend fun read(path: String): JSONObject? = null
     /** Full Firestore name of a document, as used by cursors and __name__ filters. */
     fun documentName(path: String): String = path
 }
@@ -48,19 +50,23 @@ class FirebasePlayers(context: Context) : PlayerCloud {
     }
     private val database get() = "projects/${config.first}/databases/(default)"
 
-    private fun post(url: String, body: String): String {
+    /** body = null sends a GET; a missing document then returns null instead of throwing. */
+    private fun request(url: String, body: String?): String? {
         val connection = URL("$url?key=${URLEncoder.encode(config.second, "UTF-8")}").openConnection() as HttpURLConnection
         try {
-            connection.requestMethod = "POST"
+            connection.requestMethod = if (body == null) "GET" else "POST"
             connection.connectTimeout = 15000
             connection.readTimeout = 20000
-            connection.doOutput = true
-            connection.setRequestProperty("Content-Type", "application/json")
             // Lets an Android-restricted API key accept these REST calls.
             connection.setRequestProperty("X-Android-Package", packageName)
             certificate?.let { connection.setRequestProperty("X-Android-Cert", it) }
-            connection.outputStream.use { it.write(body.toByteArray(Charsets.UTF_8)) }
+            if (body != null) {
+                connection.doOutput = true
+                connection.setRequestProperty("Content-Type", "application/json")
+                connection.outputStream.use { it.write(body.toByteArray(Charsets.UTF_8)) }
+            }
             val code = connection.responseCode
+            if (body == null && code == 404) return null
             val raw = (if (code in 200..299) connection.inputStream else connection.errorStream)
                 ?.bufferedReader()?.use { it.readText() } ?: ""
             if (code !in 200..299) {
@@ -78,6 +84,7 @@ class FirebasePlayers(context: Context) : PlayerCloud {
             return raw
         } finally { connection.disconnect() }
     }
+    private fun post(url: String, body: String): String = request(url, body)!!
 
     /** Atomically replaces each document and stamps updatedAt with the server time. */
     override suspend fun write(documents: Map<String, JSONObject>) = withContext(Dispatchers.IO) {
@@ -107,6 +114,10 @@ class FirebasePlayers(context: Context) : PlayerCloud {
                 .put("aggregations", JSONArray().put(JSONObject().put("alias", "n").put("count", JSONObject())))).toString())
         JSONArray(raw).getJSONObject(0).getJSONObject("result").getJSONObject("aggregateFields")
             .getJSONObject("n").getString("integerValue").toLong()
+    }
+
+    override suspend fun read(path: String): JSONObject? = withContext(Dispatchers.IO) {
+        request("https://firestore.googleapis.com/v1/$database/documents/$path", null)?.let { JSONObject(it) }
     }
 
     override fun documentName(path: String) = "$database/documents/$path"

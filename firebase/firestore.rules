@@ -16,7 +16,24 @@ service cloud.firestore {
             && request.resource.data.totalMs == resource.data.totalMs));
       allow delete: if false;
     }
+    // Unique player names: names/{hex of the lowercased name} -> owning player id.
+    // Once reserved, a name never changes owner, whatever avatar the other player picks.
+    match /names/{key} {
+      allow read: if true;
+      allow create: if key.matches('^[0-9a-f]{4,192}$') && validName(request.resource.data);
+      allow update: if validName(request.resource.data)
+        && request.resource.data.playerId == resource.data.playerId;
+      allow delete: if false;
+    }
     match /{document=**} { allow read, write: if false; }
+
+    function validName(data) {
+      return data.keys().hasOnly(['name', 'playerId', 'updatedAt'])
+        && data.keys().hasAll(['name', 'playerId', 'updatedAt'])
+        && data.name is string && data.name.size() >= 2 && data.name.size() <= 24
+        && data.playerId is string && data.playerId.matches('^[0-9a-f-]{36}$')
+        && data.updatedAt == request.time;
+    }
 
     function validBoard(board) {
       return board.matches('^day_(EASY|MEDIUM|HARD|ALL)_[0-9]{4}-[0-9]{2}-[0-9]{2}$')

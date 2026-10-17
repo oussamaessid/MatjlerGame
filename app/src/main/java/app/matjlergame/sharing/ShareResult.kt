@@ -25,7 +25,7 @@ data class ShareResult(
     val headline: String get() = if (wordGame) {
         if (english) { if (won) "I found today's word!" else "Today's word challenged me!" }
         else { if (won) "J’ai trouvé le mot du jour !" else "J’ai tenté le mot du jour !" }
-    } else if (won) "Niveau du jour réussi !" else "J’ai relevé le défi du jour !"
+    } else if (won) "Défi du jour réussi !" else "J’ai relevé le défi du jour !"
     val timeLabel: String get() = durationMs?.takeIf { it > 0 }?.let { app.matjlergame.domain.model.GameTimer.format(it) }
         ?: if (english) "Unavailable" else "Indisponible"
     val attemptsLabel: String get() = "${if (won) attempts else "X"}/$maxAttempts"
@@ -43,6 +43,12 @@ data class ShareResult(
             } }) }
         }
         appendLine()
-        append(if (english) "Your turn!" else "À vous de jouer !")
+        appendLine(if (english) "Your turn!" else "À vous de jouer !")
+        append("👉 $PLAY_LINK")
+    }
+
+    companion object {
+        /** Google Play offers "Open" when the game is installed and "Install" otherwise. */
+        const val PLAY_LINK = "https://play.google.com/store/apps/details?id=app.matjlergame"
     }
 }

@@ -22,7 +22,7 @@ class PlayerProfilePersistenceTest {
     @Test fun profileEditsSurviveWithoutFirebase() = runBlocking {
         val storage = MemoryPreferences()
         val repository = PlayerRepository(storage)
-        assertTrue(repository.saveGlobalProfile("  Alice  ", 5))
+        assertNull(repository.saveGlobalProfile("  Alice  ", 5))
         repository.completeSetup()
         repository.syncScores()
         val reopened = PlayerRepository(storage)
@@ -54,10 +54,17 @@ class PlayerProfilePersistenceTest {
     @Test fun ludoSelectionAndExistingClassicIdsSurviveRestart() = runBlocking {
         val storage = MemoryPreferences()
         val repository = PlayerRepository(storage)
-        assertTrue(repository.saveGlobalProfile("Joueur Ludo", 55))
+        assertNull(repository.saveGlobalProfile("Joueur Ludo", 55))
         assertEquals(55, PlayerRepository(storage).currentProfile.avatar)
-        assertTrue(repository.saveGlobalProfile("Joueur classique", 0))
+        assertNull(repository.saveGlobalProfile("Joueur classique", 0))
         assertEquals(0, PlayerRepository(storage).currentProfile.avatar)
+    }
+
+    @Test fun nameKeyIgnoresCaseAndSpacesButNotTheAvatar() {
+        assertEquals(PlayerRepository.nameKey("Alice"), PlayerRepository.nameKey("  ALICE "))
+        assertEquals(PlayerRepository.nameKey("Ali  ce"), PlayerRepository.nameKey("ali ce"))
+        assertNotEquals(PlayerRepository.nameKey("Alice"), PlayerRepository.nameKey("Alicia"))
+        assertTrue(PlayerRepository.nameKey("Été ⭐/x").matches(Regex("[0-9a-f]+")))
     }
 
     @Test fun invalidProfileCannotReplaceExistingProfile() {

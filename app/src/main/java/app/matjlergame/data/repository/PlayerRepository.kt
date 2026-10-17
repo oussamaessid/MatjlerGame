@@ -18,9 +18,9 @@ class PlayerRepository(private val prefs: SharedPreferences, val firebase: Playe
         if (!prefs.contains("player_id")) {
             val id = UUID.randomUUID().toString()
             check(prefs.edit().putString("player_id", id)
-                .putString("player_name", "Joueur-${id.take(8)}").putInt("player_avatar", PlayerAvatars.DEFAULT).commit())
+                .putString("player_name", defaultName(id)).putInt("player_avatar", PlayerAvatars.DEFAULT).commit())
         } else if ((!prefs.getBoolean("profile_setup_complete", false) ||
-            prefs.getString("player_name", "") == "Joueur-${prefs.getString("player_id", "")!!.take(8)}") &&
+            prefs.getString("player_name", "") == defaultName(prefs.getString("player_id", "")!!)) &&
             !prefs.getBoolean("avatar_customized", false) && prefs.getInt("player_avatar", 8) == 8) {
             // Only migrate the old automatic avatar; preserve personalized profiles.
             check(prefs.edit().putInt("player_avatar", PlayerAvatars.DEFAULT).commit())
@@ -84,6 +84,9 @@ class PlayerRepository(private val prefs: SharedPreferences, val firebase: Playe
         }
         syncLock.withLock {
             syncError = null
+            // Players from earlier versions claim their name once; a name already taken is left as is.
+            val current = profile()
+            if (!needsSetup && current.name != defaultName(current.id)) reserveName(current.name)
             val today = PlayerPeriods.today()
             // Retry every saved period, even after several days offline.
             val days = (listOf(today) + prefs.all.filterKeys { it.startsWith("score_") }.values.mapNotNull {
@@ -116,10 +119,41 @@ class PlayerRepository(private val prefs: SharedPreferences, val firebase: Playe
             }
         }
     }
-    suspend fun saveGlobalProfile(name: String, avatar: Int): Boolean {
-        if (!update(name, avatar)) return false
+    /** Returns null once saved, otherwise the message to show (name taken, offline…). */
+    suspend fun saveGlobalProfile(name: String, avatar: Int): String? {
+        if (globalEnabled) reserveName(name)?.let { return it }
+        if (!update(name, avatar)) return "Enregistrement impossible."
         syncScores()
-        return true
+        return null
+    }
+
+    /**
+     * Claims the name in names/{nameKey} so that no other player can use it, whatever their avatar.
+     * firestore.rules refuse to hand a reserved name to another player id, even on simultaneous requests.
+     */
+    suspend fun reserveName(name: String): String? {
+        val key = nameKey(name)
+        if (prefs.getString("reserved_name", null) == key) return null
+        val cloud = firebase!!
+        val path = "names/$key"
+        val me = profile().id
+        fun takenByOther(document: JSONObject?) = document?.optJSONObject("fields")?.optJSONObject("playerId")
+            ?.optString("stringValue")?.let { it != me } == true
+        try {
+            if (takenByOther(cloud.read(path))) return NAME_TAKEN
+            cloud.write(mapOf(path to JSONObject()
+                .put("name", JSONObject().put("stringValue", name.trim()))
+                .put("playerId", JSONObject().put("stringValue", me))))
+        } catch (e: CancellationException) { throw e }
+        catch (e: Exception) {
+            // Lost the race to another player between the read and the write.
+            if (e is FirebaseRequestException && e.status == "PERMISSION_DENIED" &&
+                runCatching { takenByOther(cloud.read(path)) }.getOrDefault(false)) return NAME_TAKEN
+            return if (e is java.io.IOException) "Connexion impossible : vérifiez Internet pour valider ce pseudo."
+                else "Le pseudo n’a pas pu être vérifié. Réessayez dans un instant."
+        }
+        prefs.edit().putString("reserved_name", key).apply()
+        return null
     }
     /**
      * The player's neighbourhood in the current period: up to 2 players ahead, the player, up to 2 behind,
@@ -202,6 +236,15 @@ class PlayerRepository(private val prefs: SharedPreferences, val firebase: Playe
         /** Players shown on each side of the current player. */
         private const val NEIGHBOURS = 2
         const val ALL = "ALL"
+        const val NAME_TAKEN = "Ce pseudo est déjà utilisé par un autre joueur. Choisissez-en un autre."
+        fun defaultName(id: String) = "Joueur-${id.take(8)}"
+        /**
+         * Firestore id shared by every spelling of a name: "Alice", " ALICE " and "alice" collide.
+         * Hex keeps any character (emoji, accents, "/") valid in a document id.
+         */
+        fun nameKey(name: String): String = java.text.Normalizer.normalize(name.trim().replace(Regex("\\s+"), " "),
+            java.text.Normalizer.Form.NFKC).lowercase(java.util.Locale.ROOT)
+            .toByteArray(Charsets.UTF_8).joinToString("") { "%02x".format(it) }
         /** Firestore board id, e.g. day_HARD_2026-10-14, week_ALL_2026-W42 or month_EASY_2026-10. */
         fun boardId(period: RankingPeriod, mode: GameMode?, id: String) = "${period.key}_${mode?.name ?: ALL}_$id"
     }

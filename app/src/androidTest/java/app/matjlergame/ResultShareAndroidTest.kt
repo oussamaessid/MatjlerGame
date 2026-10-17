@@ -11,7 +11,7 @@ import java.io.File
 class ResultShareAndroidTest {
     @Test fun imageAndTextCanBeReadAndOnlyGrantTemporaryReadAccess() {
         val context=InstrumentationRegistry.getInstrumentation().targetContext
-        val result=ShareResult("Equal To","Joueur Test","2026-10-15","Mode Difficile · Niveau 42",true,3,5,83400,
+        val result=ShareResult("Equal To","Joueur Test","2026-10-15","Mode Difficile",true,3,5,83400,
             english=false,wordGame=false,
             grid=emptyList(),avatarResource=R.drawable.avatar_ludo_04)
         val intent=ResultShare.imageIntent(context,result)

@@ -59,7 +59,7 @@ class MainActivity : ComponentActivity() {
 
         // Mise à jour obligatoire d'abord ; les pubs ne démarrent que si l'app est à jour
         // (jamais d'App Open par-dessus l'écran de mise à jour).
-        forceUpdate.check {
+        val continueStartup: () -> Unit = {
             try {
                 adManager.initialize()
                 if (!isFirstLaunch) {
@@ -71,6 +71,9 @@ class MainActivity : ComponentActivity() {
                 Log.e("MainActivity", "Erreur chargement annonces", e)
             }
         }
+        // A debug build may not exist on Google Play. Skipping the store check also
+        // keeps local development and automated demos inside the app.
+        if (!BuildConfig.DEBUG) forceUpdate.check(continueStartup)
     }
 }
 

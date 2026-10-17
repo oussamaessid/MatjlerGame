@@ -122,8 +122,8 @@ fun DailyResultDialog(
                     fontSize = 22.sp, fontWeight = FontWeight.Bold, color = modeColor)
                 ShareResultButtons(app.matjlergame.sharing.ShareResult(
                     game = "Equal To", player = playerName, day = result.day,
-                    category = "Mode ${modeName.lowercase().replaceFirstChar { it.uppercaseChar() }}" +
-                        (result.levelNumber?.let { " · Niveau $it" } ?: ""),
+                    // No level number: the game's date is already shown under the title.
+                    category = "Mode ${modeName.lowercase().replaceFirstChar { it.uppercaseChar() }}",
                     won = result.won, attempts = result.attempts, maxAttempts = if (result.attempts > 5) result.attempts else 5,
                     durationMs = result.durationMs,
                     avatarResource = AvatarGallery.icons.getOrElse(playerAvatar) { AvatarGallery.icons[11] }))

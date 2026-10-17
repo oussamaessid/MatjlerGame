@@ -11,7 +11,7 @@ class ResultShareTest {
         val text=sample().text
         assertTrue(text.contains("14/10/2026")); assertTrue(text.contains("01:23"))
         assertTrue(text.contains("J’ai trouvé le mot du jour")); assertTrue(text.contains("🟩🟨⬛⬛🟩"))
-        assertFalse(text.contains("POMME"))
+        assertFalse(text.contains("POMME")); assertTrue(text.endsWith(ShareResult.PLAY_LINK))
     }
     @Test fun englishResultAndLossNeverClaimVictory() {
         val result=sample(english=true,won=false)
@@ -20,8 +20,8 @@ class ResultShareTest {
     }
     @Test fun eachMathDifficultyIsPreserved() {
         for(mode in listOf("Facile","Moyen","Difficile")) {
-            val result=ShareResult("Equal To","Alice","2026-10-15","Mode $mode · Niveau 42",true,2,5,3723000)
-            assertTrue(result.text.contains("Mode $mode · Niveau 42"));assertTrue(result.text.contains("1:02:03"))
+            val result=ShareResult("Equal To","Alice","2026-10-15","Mode $mode",true,2,5,3723000)
+            assertTrue(result.text.contains("Mode $mode")); assertFalse(result.text.contains("Niveau")); assertTrue(result.text.contains("15/10/2026"));assertTrue(result.text.contains("1:02:03"))
             assertTrue(result.text.contains("Essais : 2/5"))
         }
     }
