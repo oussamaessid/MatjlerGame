@@ -100,6 +100,15 @@ fun MathlerGameApp(
         }
         return
     }
+    var showQuickStart by androidx.compose.runtime.saveable.rememberSaveable {
+        mutableStateOf(!sharedPreferences.getBoolean("quick_start_completed", false))
+    }
+    if (showQuickStart) {
+        app.matjlergame.presentation.ui.QuickStartDialog {
+            sharedPreferences.edit().putBoolean("quick_start_completed", true).apply()
+            showQuickStart = false
+        }
+    }
     val repository                   = remember { LevelRepositoryImpl() }
     val validateExpressionUseCase    = remember { ValidateExpressionUseCase() }
     val calculateTileStatusesUseCase = remember { CalculateTileStatusesUseCase() }
@@ -152,6 +161,11 @@ fun MathlerGameApp(
             }
 
             ModeSelectScreen(
+                completedModes = GameMode.values().filter {
+                    dailyLevelManager.hasPlayedToday(it, sharedPreferences)
+                }.toSet(),
+                totalPlayed = GameMode.values().sumOf { dailyLevelManager.getStatistics(it, sharedPreferences).totalPlayed },
+                totalWon = GameMode.values().sumOf { dailyLevelManager.getStatistics(it, sharedPreferences).totalWon },
                 adManager          = adManager,
                 isLoading          = isLoading,
                 playerName = playerRepository.currentProfile.name,
@@ -163,12 +177,6 @@ fun MathlerGameApp(
 
                     if (isLoading) return@ModeSelectScreen   // déjà en cours, ignorer
 
-                    // ── Étape 1 : vérifier la connexion (UNIQUEMENT ici, déclenché par clic)
-                    if (!NetworkChecker.isInternetAvailable(context)) {
-                        showNoInternetDialog = true
-                        return@ModeSelectScreen
-                    }
-
                     // ── Étape 2 : déjà joué aujourd'hui ?
                     if (dailyLevelManager.hasPlayedToday(mode, sharedPreferences)) {
                         val result = dailyLevelManager.getTodayResult(mode, sharedPreferences)
@@ -179,6 +187,12 @@ fun MathlerGameApp(
                             dialogStats      = stats
                             showResultDialog = true
                         }
+                        return@ModeSelectScreen
+                    }
+
+                    // ── Étape 1 : vérifier la connexion (UNIQUEMENT ici, déclenché par clic)
+                    if (!NetworkChecker.isInternetAvailable(context)) {
+                        showNoInternetDialog = true
                         return@ModeSelectScreen
                     }
 

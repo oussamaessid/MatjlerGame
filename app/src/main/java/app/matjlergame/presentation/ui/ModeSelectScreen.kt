@@ -9,6 +9,8 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -73,7 +75,10 @@ fun ModeSelectScreen(
     playerAvatar: Int = 0,
     onProfileClicked: () -> Unit = {},
     onRankingClicked: () -> Unit = {},
-    onHowToPlayClicked: () -> Unit = {}
+    onHowToPlayClicked: () -> Unit = {},
+    completedModes: Set<GameMode> = emptySet(),
+    totalPlayed: Int = 0,
+    totalWon: Int = 0
 ) {
     // ✅ SUPPRIMÉ : showNoInternetDialog local — c'était la cause du bug
     // Le dialog internet est géré uniquement dans MainActivity
@@ -163,7 +168,7 @@ fun ModeSelectScreen(
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(cardSpacing),
-                    modifier            = Modifier.padding(24.dp)
+                    modifier            = Modifier.verticalScroll(rememberScrollState()).padding(24.dp)
                 ) {
                     val infiniteTransition = rememberInfiniteTransition(label = "title")
                     val titleScale by infiniteTransition.animateFloat(
@@ -188,12 +193,33 @@ fun ModeSelectScreen(
                             letterSpacing = 2.sp
                         )
                         Text(
-                            text       = "Math Puzzle Game",
+                            text       = "Votre rendez-vous logique du jour",
                             fontSize   = 18.sp,
                             fontWeight = FontWeight.Medium,
                             color      = Color.White.copy(alpha = 0.9f)
                         )
                     }
+
+                    Text(
+                        text = "DÉFIS DU JOUR · ${completedModes.size}/3 terminés",
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 16.sp
+                    )
+                    Text(
+                        text = if (totalPlayed == 0) "Commencez par le mode facile. À vous de jouer !"
+                            else "$totalPlayed parties · $totalWon victoires · ${totalWon * 100 / totalPlayed} % de réussite",
+                        color = Color.White,
+                        fontSize = 13.sp,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                    )
+                    Text(
+                        text = if (completedModes.size == 3) "Bravo ! Revenez demain pour trois nouvelles énigmes."
+                            else "Une énigme par difficulté. Touchez un défi terminé pour revoir et partager votre résultat.",
+                        color = Color.White.copy(alpha = 0.9f),
+                        fontSize = 12.sp,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                    )
 
                     val cardsEnabled = !isLoading
 
@@ -202,7 +228,7 @@ fun ModeSelectScreen(
                     ModeCard(
                         title       = "FACILE",
                         emoji       = "🌱",
-                        description = "Pour débuter",
+                        description = if (GameMode.EASY in completedModes) "✓ Terminé · Voir mon résultat" else "Pour débuter",
                         gradient    = listOf(Color(0xFF4CAF50), Color(0xFF8BC34A)),
                         enabled     = cardsEnabled,
                         cardHeight  = cardHeight,
@@ -217,7 +243,7 @@ fun ModeSelectScreen(
                     ModeCard(
                         title       = "MOYEN",
                         emoji       = "⚡",
-                        description = "Un peu plus dur",
+                        description = if (GameMode.MEDIUM in completedModes) "✓ Terminé · Voir mon résultat" else "Un peu plus dur",
                         gradient    = listOf(Color(0xFFFF9800), Color(0xFFFFB74D)),
                         enabled     = cardsEnabled,
                         cardHeight  = cardHeight,
@@ -232,7 +258,7 @@ fun ModeSelectScreen(
                     ModeCard(
                         title       = "DIFFICILE",
                         emoji       = "🔥",
-                        description = "Expert seulement",
+                        description = if (GameMode.HARD in completedModes) "✓ Terminé · Voir mon résultat" else "Expert seulement",
                         gradient    = listOf(Color(0xFFF44336), Color(0xFFE91E63)),
                         enabled     = cardsEnabled,
                         cardHeight  = cardHeight,

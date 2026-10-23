@@ -11,7 +11,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -28,6 +28,9 @@ fun HowToPlayScreen(
     // The phone's back button returns to the menu instead of closing the app.
     BackHandler(onBack = onBack)
     val scrollState = rememberScrollState()
+    var showPractice by remember { mutableStateOf(false) }
+    if (showPractice) QuickStartDialog { showPractice = false }
+
 
     Column(
         modifier = Modifier
@@ -82,6 +85,9 @@ fun HowToPlayScreen(
                 .padding(24.dp),
             verticalArrangement = Arrangement.spacedBy(24.dp)
         ) {
+            Button(onClick = { showPractice = true }, modifier = Modifier.fillMaxWidth()) {
+                Text("Essayer une énigme guidée")
+            }
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(containerColor = Color(0xFFF8FAFC)),
