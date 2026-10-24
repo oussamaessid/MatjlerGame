@@ -36,6 +36,7 @@ fun HowToPlayScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(Color(0xFFFFFFFF))
+            .navigationBarsPadding()
     ) {
         Box(
             modifier = Modifier
@@ -123,7 +124,7 @@ fun HowToPlayScreen(
                     repeat(6) {
                         Box(
                             modifier = Modifier
-                                .size(44.dp)
+                                .size(((androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp - 120) / 6).coerceIn(20, 44).dp)
                                 .clip(RoundedCornerShape(8.dp))
                                 .background(Color.White)
                                 .border(2.dp, Color(0xFFD1D5DB), RoundedCornerShape(8.dp))
@@ -322,7 +323,7 @@ private fun ExampleTile(
 ) {
     Box(
         modifier = Modifier
-            .size(44.dp)
+            .size(((androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp - 120) / 6).coerceIn(20, 44).dp)
             .clip(RoundedCornerShape(8.dp))
             .background(backgroundColor)
             .border(2.dp, backgroundColor, RoundedCornerShape(8.dp)),

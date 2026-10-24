@@ -3,6 +3,8 @@ package app.matjlergame.presentation.ui
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
@@ -44,13 +46,12 @@ fun ApiLoadingDialog(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.7f)),
+            .background(Color.Black.copy(alpha = 0.7f)).safeDrawingPadding(),
         contentAlignment = Alignment.Center
     ) {
         Card(
             modifier = Modifier
-                .fillMaxWidth(0.85f)
-                .padding(24.dp),
+                .widthIn(max = 480.dp).fillMaxWidth().padding(12.dp),
             shape = RoundedCornerShape(24.dp),
             colors = CardDefaults.cardColors(
                 containerColor = Color.White
@@ -59,8 +60,8 @@ fun ApiLoadingDialog(
         ) {
             Column(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(32.dp),
+                    .fillMaxWidth().verticalScroll(rememberScrollState())
+                    .padding(20.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(20.dp)
             ) {

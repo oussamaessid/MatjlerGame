@@ -3,6 +3,8 @@ package app.matjlergame.presentation.ui
 import android.app.Activity
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -21,6 +23,7 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -76,46 +79,9 @@ fun GameScreen(
         }
     }
 
-    // ── CALCUL DYNAMIQUE DE LA TAILLE DES CELLULES ──────────────────
-    // Réserve d'espace pour header, clavier, banner et espacements
-    val headerHeight       = 60.dp
-    val keyboardHeight     = 220.dp
-    val bannerHeight       = 50.dp + 24.dp
-    val totalReservedSpace = headerHeight + keyboardHeight + bannerHeight + 60.dp // + marges/espacements
-
-    // Hauteur disponible pour la grille
-    val availableGridHeight = screenHeight - totalReservedSpace
-
-    // Nombre de lignes dans la grille
-    val gridRows = gameState.guesses.size
-
-    // Calcul de la taille des cellules en fonction de l'espace disponible
-    val tileSpacing  = if (screenWidth < 360.dp) 2.5.dp else 3.5.dp
-    val totalSpacing = tileSpacing * (level.slots - 1)
-
-    // Taille basée sur la LARGEUR
-    var tileSizeFromWidth = (screenWidth - 32.dp - totalSpacing) / level.slots
-    tileSizeFromWidth = when {
-        screenWidth < 360.dp && level.slots >= 6 -> minOf(tileSizeFromWidth, 32.dp)
-        screenWidth < 380.dp && level.slots >= 6 -> minOf(tileSizeFromWidth, 36.dp)
-        screenWidth < 400.dp                     -> minOf(tileSizeFromWidth, 40.dp)
-        else                                     -> minOf(tileSizeFromWidth, 46.dp)
-    }
-
-    // Taille basée sur la HAUTEUR (nouveau)
-    val verticalSpacingBetweenRows = tileSpacing * (gridRows - 1)
-    val tileSizeFromHeight = (availableGridHeight - 80.dp - verticalSpacingBetweenRows) / gridRows
-
-    // Prendre la PLUS PETITE des deux pour que tout rentre
-    val tileSize = minOf(tileSizeFromWidth, tileSizeFromHeight)
+    val tileSpacing = 3.dp
 
     // ── Clavier ─────────────────────────────────────────────────────
-    val keyButtonHeight = when {
-        screenHeight < 580.dp -> 34.dp
-        screenHeight < 680.dp -> 38.dp
-        screenHeight < 780.dp -> 42.dp
-        else                  -> 46.dp
-    }
     val keyRowSpacing = when {
         screenHeight < 580.dp -> 2.5.dp
         screenHeight < 680.dp -> 3.5.dp
@@ -170,6 +136,7 @@ fun GameScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .background(Color(0xFFFFFFFF))
+                .safeDrawingPadding()
         ) {
 
             // ════════════════
@@ -179,7 +146,6 @@ fun GameScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .background(modeColor)
-                    .statusBarsPadding()
                     .padding(horizontal = headerPadding, vertical = headerPadding),
                 verticalAlignment     = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
@@ -202,6 +168,7 @@ fun GameScreen(
                     verticalAlignment     = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
                     modifier = Modifier
+                        .weight(1f)
                         .clip(RoundedCornerShape(8.dp))
                         .background(Color.White.copy(alpha = 0.2f))
                         .padding(horizontal = 10.dp, vertical = 4.dp)
@@ -225,133 +192,176 @@ fun GameScreen(
                     fontSize   = headerTextSize,
                     fontWeight = FontWeight.Medium,
                     color      = Color.White,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                     modifier   = Modifier
+                        .weight(1f)
                         .clip(RoundedCornerShape(6.dp))
                         .background(Color.White.copy(alpha = 0.2f))
                         .padding(horizontal = 8.dp, vertical = 4.dp)
                 )
             }
 
-            // ════════════════
-            // ZONE DE JEU
-            // ════════════════
-            Column(
-                modifier            = Modifier
-                    .fillMaxWidth()
-                    .weight(1f)
-                    .padding(horizontal = 16.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center
-            ) {
-                Text(
-                    text       = "Objectif : atteindre ${level.target}",
-                    fontSize   = objectiveTextSize,
-                    fontWeight = FontWeight.Medium,
-                    color      = Color(0xFF334155),
-                    textAlign  = TextAlign.Center
-                )
-                Spacer(Modifier.height(gameSectionGap))
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(if (screenWidth < 360.dp) 4.dp else 6.dp),
-                    verticalAlignment     = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .wrapContentWidth()
-                        .align(Alignment.CenterHorizontally),
-                    content = {
-                        LegendItem(Color(0xFF6AAA64), "✓", legendTextSize, modifier = Modifier)
-                        LegendItem(Color(0xFFC9B458), "⚠", legendTextSize, modifier = Modifier)
-                        LegendItem(Color(0xFF787C7E), "✗", legendTextSize, modifier = Modifier)
-                    }
-                )
-                Spacer(Modifier.height(gameSectionGap))
-
-                // Grille — taille adaptée
-                Column(
-                    verticalArrangement = Arrangement.spacedBy(tileSpacing),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    for (row in 0 until gameState.guesses.size) {
-                        val offsetX by animateFloatAsState(
-                            targetValue   = if (row == gameState.currentGuess && gameState.isShaking) 8f else 0f,
-                            animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessHigh),
-                            label = "shake"
-                        )
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(tileSpacing),
-                            modifier              = Modifier.offset(x = offsetX.dp)
+            BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
+                val contentHeight = maxHeight
+                val sideBySide = maxWidth > maxHeight * 1.25f
+                val grid: @Composable (Modifier) -> Unit = { pane ->
+                    BoxWithConstraints(pane) {
+                        val tileSize = responsiveTileSize(maxWidth.value, maxHeight.value,
+                            level.slots, gameState.guesses.size, tileSpacing.value).dp
+                        Column(
+                            modifier            = Modifier
+                                .fillMaxSize()
+                                .verticalScroll(rememberScrollState())
+                                .padding(horizontal = 16.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center
                         ) {
-                            for (col in 0 until level.slots) {
-                                GameTile(
-                                    letter   = gameState.guesses[row][col],
-                                    status   = gameState.tileStatuses[row][col],
-                                    isActive = row == gameState.currentGuess && col == gameState.currentPos && !gameState.gameOver,
-                                    size     = tileSize,
-                                    isBonus  = row >= 4
+                            Text(
+                                text       = "Objectif : atteindre ${level.target}",
+                                fontSize   = objectiveTextSize,
+                                fontWeight = FontWeight.Medium,
+                                color      = Color(0xFF334155),
+                                textAlign  = TextAlign.Center
+                            )
+                            Spacer(Modifier.height(gameSectionGap))
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(if (screenWidth < 360.dp) 4.dp else 6.dp),
+                                verticalAlignment     = Alignment.CenterVertically,
+                                modifier = Modifier
+                                    .wrapContentWidth()
+                                    .align(Alignment.CenterHorizontally),
+                                content = {
+                                    LegendItem(Color(0xFF6AAA64), "✓", legendTextSize, modifier = Modifier)
+                                    LegendItem(Color(0xFFC9B458), "⚠", legendTextSize, modifier = Modifier)
+                                    LegendItem(Color(0xFF787C7E), "✗", legendTextSize, modifier = Modifier)
+                                }
+                            )
+                            Spacer(Modifier.height(gameSectionGap))
+
+                            // Grille — taille adaptée
+                            Column(
+                                verticalArrangement = Arrangement.spacedBy(tileSpacing),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                for (row in 0 until gameState.guesses.size) {
+                                    val offsetX by animateFloatAsState(
+                                        targetValue   = if (row == gameState.currentGuess && gameState.isShaking) 8f else 0f,
+                                        animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessHigh),
+                                        label = "shake"
+                                    )
+                                    Row(
+                                        horizontalArrangement = Arrangement.spacedBy(tileSpacing),
+                                        modifier              = Modifier.offset(x = offsetX.dp)
+                                    ) {
+                                        for (col in 0 until level.slots) {
+                                            GameTile(
+                                                letter   = gameState.guesses[row][col],
+                                                status   = gameState.tileStatuses[row][col],
+                                                isActive = row == gameState.currentGuess && col == gameState.currentPos && !gameState.gameOver,
+                                                size     = tileSize,
+                                                isBonus  = row >= 4
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                    }
+                }
+                val keyboard: @Composable (Modifier) -> Unit = { pane ->
+                    BoxWithConstraints(pane) {
+                        val keyButtonHeight = ((maxHeight - 28.dp) / (if (sideBySide) 3 else 5)).coerceIn(24.dp, 54.dp)
+                        if (sideBySide) {
+                            Column(Modifier.fillMaxWidth().padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                listOf("7", "8", "9", "/", "4", "5", "6", "*", "1", "2", "3", "-", "DEL", "0", "+", "VALIDER")
+                                    .chunked(6).forEach { keys ->
+                                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                            keys.forEach { key ->
+                                                if (key == "DEL" || key == "VALIDER") {
+                                                    ActionKeyButton(key, if (key == "DEL") Color(0xFFFEE2E2) else Color(0xFFDCFCE7),
+                                                        if (key == "DEL") Color(0xFFB91C1C) else Color(0xFF15803D),
+                                                        { viewModel.handleKeyPress(if (key == "DEL") "DELETE" else "ENTER") },
+                                                        keyButtonHeight, actionKeyTextSize, Modifier.weight(if (key == "VALIDER") 2f else 1f))
+                                                } else KeyButton(key, keyStatuses[key] ?: TileStatus.EMPTY,
+                                                    { viewModel.handleKeyPress(key) }, keyButtonHeight, keyTextSize, Modifier.weight(1f))
+                                            }
+                                        }
+                                    }
+                            }
+                        } else {
+                        Column(
+                            modifier            = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 10.dp, vertical = 6.dp),
+                            verticalArrangement = Arrangement.spacedBy(keyRowSpacing)
+                        ) {
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(keyColSpacing)) {
+                                listOf("7", "8", "9", "/").forEach { key ->
+                                    KeyButton(key = key, status = keyStatuses[key] ?: TileStatus.EMPTY,
+                                        onClick = { viewModel.handleKeyPress(key) }, height = keyButtonHeight,
+                                        textSize = keyTextSize, modifier = Modifier.weight(1f))
+                                }
+                            }
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(keyColSpacing)) {
+                                listOf("4", "5", "6", "*").forEach { key ->
+                                    KeyButton(key = key, status = keyStatuses[key] ?: TileStatus.EMPTY,
+                                        onClick = { viewModel.handleKeyPress(key) }, height = keyButtonHeight,
+                                        textSize = keyTextSize, modifier = Modifier.weight(1f))
+                                }
+                            }
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(keyColSpacing)) {
+                                listOf("1", "2", "3", "-").forEach { key ->
+                                    KeyButton(key = key, status = keyStatuses[key] ?: TileStatus.EMPTY,
+                                        onClick = { viewModel.handleKeyPress(key) }, height = keyButtonHeight,
+                                        textSize = keyTextSize, modifier = Modifier.weight(1f))
+                                }
+                            }
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(keyColSpacing)) {
+                                ActionKeyButton(key = "DEL", backgroundColor = Color(0xFFFEE2E2), textColor = Color(0xFFB91C1C),
+                                    onClick = { viewModel.handleKeyPress("DELETE") }, height = keyButtonHeight,
+                                    textSize = actionKeyTextSize, modifier = Modifier.weight(1f))
+                                KeyButton(key = "0", status = keyStatuses["0"] ?: TileStatus.EMPTY,
+                                    onClick = { viewModel.handleKeyPress("0") }, height = keyButtonHeight,
+                                    textSize = keyTextSize, modifier = Modifier.weight(1f))
+                                KeyButton(key = "+", status = keyStatuses["+"] ?: TileStatus.EMPTY,
+                                    onClick = { viewModel.handleKeyPress("+") }, height = keyButtonHeight,
+                                    textSize = keyTextSize, modifier = Modifier.weight(1f))
+                            }
+                            // ✅ VALIDER
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(keyButtonHeight)
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .background(Color(0xFFDCFCE7))
+                                    .clickable { viewModel.handleKeyPress("ENTER") },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text       = "VALIDER",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize   = actionKeyTextSize,
+                                    color      = Color(0xFF15803D),
+                                    textAlign  = TextAlign.Center
                                 )
                             }
                         }
-                    }
-                }
-            }
 
-            // ════════════════
-            // CLAVIER FIXE
-            // ════════════════
-            Column(
-                modifier            = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 10.dp, vertical = 6.dp),
-                verticalArrangement = Arrangement.spacedBy(keyRowSpacing)
-            ) {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(keyColSpacing)) {
-                    listOf("7", "8", "9", "/").forEach { key ->
-                        KeyButton(key = key, status = keyStatuses[key] ?: TileStatus.EMPTY,
-                            onClick = { viewModel.handleKeyPress(key) }, height = keyButtonHeight,
-                            textSize = keyTextSize, modifier = Modifier.weight(1f))
+                        }
                     }
                 }
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(keyColSpacing)) {
-                    listOf("4", "5", "6", "*").forEach { key ->
-                        KeyButton(key = key, status = keyStatuses[key] ?: TileStatus.EMPTY,
-                            onClick = { viewModel.handleKeyPress(key) }, height = keyButtonHeight,
-                            textSize = keyTextSize, modifier = Modifier.weight(1f))
+                if (sideBySide) {
+                    Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
+                        grid(Modifier.weight(1f).fillMaxHeight())
+                        keyboard(Modifier.weight(1f).fillMaxHeight())
                     }
-                }
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(keyColSpacing)) {
-                    listOf("1", "2", "3", "-").forEach { key ->
-                        KeyButton(key = key, status = keyStatuses[key] ?: TileStatus.EMPTY,
-                            onClick = { viewModel.handleKeyPress(key) }, height = keyButtonHeight,
-                            textSize = keyTextSize, modifier = Modifier.weight(1f))
+                } else {
+                    Column(Modifier.fillMaxSize()) {
+                        grid(Modifier.weight(1f).fillMaxWidth())
+                        keyboard(Modifier.fillMaxWidth().height((contentHeight * 0.47f).coerceIn(188.dp, 290.dp)))
                     }
-                }
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(keyColSpacing)) {
-                    ActionKeyButton(key = "DEL", backgroundColor = Color(0xFFFEE2E2), textColor = Color(0xFFB91C1C),
-                        onClick = { viewModel.handleKeyPress("DELETE") }, height = keyButtonHeight,
-                        textSize = actionKeyTextSize, modifier = Modifier.weight(1f))
-                    KeyButton(key = "0", status = keyStatuses["0"] ?: TileStatus.EMPTY,
-                        onClick = { viewModel.handleKeyPress("0") }, height = keyButtonHeight,
-                        textSize = keyTextSize, modifier = Modifier.weight(1f))
-                    KeyButton(key = "+", status = keyStatuses["+"] ?: TileStatus.EMPTY,
-                        onClick = { viewModel.handleKeyPress("+") }, height = keyButtonHeight,
-                        textSize = keyTextSize, modifier = Modifier.weight(1f))
-                }
-                // ✅ VALIDER
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(keyButtonHeight)
-                        .clip(RoundedCornerShape(6.dp))
-                        .background(Color(0xFFDCFCE7))
-                        .clickable { viewModel.handleKeyPress("ENTER") },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text       = "VALIDER",
-                        fontWeight = FontWeight.Bold,
-                        fontSize   = actionKeyTextSize,
-                        color      = Color(0xFF15803D),
-                        textAlign  = TextAlign.Center
-                    )
                 }
             }
 
@@ -363,7 +373,6 @@ fun GameScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .background(Color.Transparent)
-                    .navigationBarsPadding()
                     .padding(top = 20.dp, bottom = 4.dp)
                     .height(50.dp),
                 contentAlignment = Alignment.Center
@@ -513,10 +522,10 @@ private fun ExtraRowAdDialog(
         Card(
             shape    = RoundedCornerShape(18.dp),
             colors   = CardDefaults.cardColors(containerColor = Color.White),
-            modifier = Modifier.fillMaxWidth(0.85f).padding(16.dp)
+            modifier = Modifier.widthIn(max = 480.dp).fillMaxWidth().padding(8.dp)
         ) {
             Column(
-                modifier            = Modifier.fillMaxWidth().padding(20.dp),
+                modifier            = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(20.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
@@ -577,10 +586,10 @@ private fun RetryVideoDialog(
         Card(
             shape    = RoundedCornerShape(18.dp),
             colors   = CardDefaults.cardColors(containerColor = Color.White),
-            modifier = Modifier.fillMaxWidth(0.85f).padding(16.dp)
+            modifier = Modifier.widthIn(max = 480.dp).fillMaxWidth().padding(8.dp)
         ) {
             Column(
-                modifier            = Modifier.fillMaxWidth().padding(20.dp),
+                modifier            = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(20.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {

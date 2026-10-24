@@ -1,5 +1,7 @@
 package app.matjlergame.presentation.ui
 
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -20,7 +22,7 @@ fun QuickStartDialog(onDismiss: () -> Unit) {
         onDismissRequest = onDismiss,
         title = { Text(if (step == 2) "Bravo, vous avez compris !" else "Votre première énigme") },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 Text("EXEMPLE GUIDÉ · SANS CLASSEMENT", fontSize = 11.sp)
                 Text("Trouvez l’expression cachée qui donne 15. Chaque couleur est un indice.")
                 if (step > 0) {

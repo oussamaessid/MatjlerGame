@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
@@ -141,29 +142,20 @@ fun DailyResultDialog(
                         modifier = Modifier.padding(bottom = 12.dp)
                     )
 
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceEvenly
-                    ) {
-                        StatColumn(
-                            value = statistics.totalPlayed.toString(),
-                            label = "Parties"
-                        )
-
-                        StatColumn(
-                            value = "${statistics.winPercentage}%",
-                            label = "Victoires"
-                        )
-
-                        StatColumn(
-                            value = statistics.currentStreak.toString(),
-                            label = "Série"
-                        )
-
-                        StatColumn(
-                            value = statistics.maxStreak.toString(),
-                            label = "Record"
-                        )
+                    BoxWithConstraints(Modifier.fillMaxWidth()) {
+                        val stats = listOf(statistics.totalPlayed.toString() to "Parties",
+                            "${statistics.winPercentage}%" to "Victoires",
+                            statistics.currentStreak.toString() to "Série", statistics.maxStreak.toString() to "Record")
+                        val columns = if (maxWidth < 300.dp || LocalDensity.current.fontScale > 1.3f) 2 else 4
+                        Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                            stats.chunked(columns).forEach { row ->
+                                Row(Modifier.fillMaxWidth()) {
+                                    row.forEach { (value, label) ->
+                                        Box(Modifier.weight(1f), contentAlignment = Alignment.Center) { StatColumn(value, label) }
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
 

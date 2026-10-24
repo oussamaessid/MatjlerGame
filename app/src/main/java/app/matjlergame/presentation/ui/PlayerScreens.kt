@@ -40,7 +40,7 @@ fun PlayerScreen(repository: PlayerRepository, ranking: Boolean, setup: Boolean 
         if (!edited) { name = repository.currentProfile.name; avatar = repository.currentProfile.avatar }
     }
     val valid = name.trim().length in 2..24 && name.none { it.isISOControl() }
-    Column(Modifier.fillMaxSize().safeDrawingPadding().verticalScroll(rememberScrollState()).padding(20.dp),
+    Column(Modifier.fillMaxSize().safeDrawingPadding().imePadding().verticalScroll(rememberScrollState()).padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -48,7 +48,7 @@ fun PlayerScreen(repository: PlayerRepository, ranking: Boolean, setup: Boolean 
                 // Icon only; the description keeps it readable by screen readers.
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Retour")
             }
-            Text(if (ranking) "Classement" else if (setup) "Bienvenue dans Equal To" else "Mon profil", style = MaterialTheme.typography.headlineMedium)
+            Text(if (ranking) "Classement" else if (setup) "Bienvenue dans Equal To" else "Mon profil", style = MaterialTheme.typography.headlineMedium, modifier = Modifier.weight(1f))
         }
         if (!ranking) {
             Text(if (setup) "Votre compte invité est créé automatiquement. Personnalisez votre profil pour rejoindre les autres joueurs."

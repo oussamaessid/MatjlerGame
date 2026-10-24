@@ -1,70 +1,35 @@
 package app.matjlergame.presentation.ui
 
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.tween
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Info
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import app.matjlergame.ads.AdManager
 import app.matjlergame.domain.model.GameMode
-import androidx.compose.ui.platform.LocalConfiguration
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.TextUnit
-import com.google.android.gms.ads.AdListener
-import com.google.android.gms.ads.AdRequest
-import com.google.android.gms.ads.AdSize
-import com.google.android.gms.ads.AdView
-import com.google.android.gms.ads.LoadAdError
+import com.google.android.gms.ads.*
 
-// ✅ AUCUNE vérification internet ici.
-// AUCUN dialog internet ici.
-// La vérification se fait UNIQUEMENT dans MainActivity → onModeSelected.
+private val HomeInk = Color(0xFF172B35)
+private val HomeMuted = Color(0xFF63747A)
+private val HomePaper = Color(0xFFF4F6F2)
+private val HomeLime = Color(0xFFD9F279)
 
 @Composable
 fun ModeSelectScreen(
@@ -80,242 +45,78 @@ fun ModeSelectScreen(
     totalPlayed: Int = 0,
     totalWon: Int = 0
 ) {
-    // ✅ SUPPRIMÉ : showNoInternetDialog local — c'était la cause du bug
-    // Le dialog internet est géré uniquement dans MainActivity
-
-    val configuration = LocalConfiguration.current
-    val screenHeight  = configuration.screenHeightDp.dp
-    val screenWidth   = configuration.screenWidthDp.dp
-    val ctx = LocalContext.current
-
-    val cardHeight  = when {
-        screenHeight < 600.dp -> 68.dp
-        screenHeight < 700.dp -> 78.dp
-        screenHeight < 800.dp -> 88.dp
-        else                  -> 100.dp
-    }
-    val cardSpacing = when {
-        screenHeight < 600.dp -> 8.dp
-        screenHeight < 700.dp -> 14.dp
-        screenHeight < 800.dp -> 22.dp
-        else                  -> 30.dp
-    }
-    val cardWidth   = minOf(300.dp, screenWidth - 48.dp)
-    val cardEmojiSz = if (screenHeight < 700.dp) 28.sp else 40.sp
-    val cardTitleSz = if (screenHeight < 700.dp) 18.sp else 24.sp
-    val cardDescSz  = if (screenHeight < 700.dp) 11.sp else 14.sp
-    val cardPadding = if (screenHeight < 700.dp) 10.dp else 20.dp
-
+    val context = LocalContext.current
     var bannerLoaded by remember { mutableStateOf(false) }
-    val bannerAdView = remember {
-        AdView(ctx).also { view ->
-            view.adUnitId = AdManager.BANNER_MODE_SELECT_AD_UNIT_ID
-            view.setAdSize(AdSize.BANNER)
-            view.adListener = object : AdListener() {
+    val banner = remember(context) {
+        AdView(context).apply {
+            adUnitId = AdManager.BANNER_MODE_SELECT_AD_UNIT_ID
+            setAdSize(AdSize.BANNER)
+            adListener = object : AdListener() {
                 override fun onAdLoaded() { bannerLoaded = true }
                 override fun onAdFailedToLoad(error: LoadAdError) { bannerLoaded = false }
             }
-            view.loadAd(AdRequest.Builder().build())
         }
     }
+    DisposableEffect(banner) {
+        banner.loadAd(AdRequest.Builder().build())
+        onDispose { banner.adListener = object : AdListener() {}; banner.destroy() }
+    }
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(
-                Brush.verticalGradient(
-                    colors = listOf(Color(0xFF667EEA), Color(0xFF764BA2))
-                )
-            )
-    ) {
-        Column(
-            modifier = Modifier.fillMaxSize(),
-            verticalArrangement = Arrangement.SpaceBetween
-        ) {
-
-            Row(
-                modifier = Modifier.fillMaxWidth().statusBarsPadding().padding(16.dp).height(56.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                androidx.compose.material3.TextButton(enabled = !isLoading, onClick = onProfileClicked,
-                    modifier = Modifier.weight(1f)) {
-                    PlayerAvatar(playerAvatar, 36.dp)
-                    Spacer(Modifier.width(8.dp))
-                    Column(Modifier.weight(1f)) {
-                        Text(playerName, color = Color.White, maxLines = 1,
-                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+    Box(Modifier.fillMaxSize().background(HomePaper).safeDrawingPadding()) {
+        BoxWithConstraints(Modifier.align(Alignment.TopCenter).widthIn(max = 960.dp).fillMaxSize()) {
+            val minimal = maxHeight < 600.dp && LocalDensity.current.fontScale > 1.5f
+            val bannerFits = maxWidth >= 320.dp
+            val landscape = maxWidth > maxHeight
+            val compact = maxHeight < 620.dp || LocalDensity.current.fontScale > 1.2f
+            val gap = if (compact) 10.dp else 18.dp
+            Column(Modifier.fillMaxSize().padding(horizontal = if (maxWidth < 360.dp) 12.dp else 20.dp), verticalArrangement = Arrangement.spacedBy(gap)) {
+                Row(Modifier.fillMaxWidth().height(56.dp), verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(Modifier.weight(1f).clip(RoundedCornerShape(16.dp))
+                        .clickable(enabled = !isLoading, onClick = onProfileClicked).padding(vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically) {
+                        PlayerAvatar(playerAvatar, 38.dp)
+                        Spacer(Modifier.width(10.dp))
+                        Column {
+                            Text("BONJOUR", fontSize = 10.sp, letterSpacing = 1.5.sp, color = HomeMuted)
+                            Text(playerName, fontSize = 15.sp, fontWeight = FontWeight.Bold,
+                                color = HomeInk, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
+                    }
+                    IconButton(enabled = !isLoading, onClick = onRankingClicked,
+                        modifier = Modifier.size(48.dp).background(Color.White, CircleShape)) {
+                        Icon(androidx.compose.ui.res.painterResource(app.matjlergame.R.drawable.ic_trophy),
+                            "Classements", tint = HomeInk, modifier = Modifier.size(23.dp))
+                    }
+                    IconButton(enabled = !isLoading, onClick = onHowToPlayClicked,
+                        modifier = Modifier.size(48.dp).background(Color.White, CircleShape)) {
+                        Icon(Icons.Default.Info, "Comment jouer", tint = HomeInk)
                     }
                 }
-                IconButton(enabled = !isLoading, onClick = onRankingClicked,
-                    modifier = Modifier.size(48.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.22f))) {
-                    Icon(androidx.compose.ui.res.painterResource(app.matjlergame.R.drawable.ic_trophy),
-                        contentDescription = "Classements", tint = Color(0xFFFFD76A), modifier = Modifier.size(28.dp))
-                }
-                IconButton(onClick = onHowToPlayClicked,
-                    modifier = Modifier.size(48.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.22f))) {
-                    Icon(Icons.Filled.Info, contentDescription = "Comment jouer", tint = Color.White, modifier = Modifier.size(28.dp))
-                }
-            }
-
-            // ── Contenu central ─────────────────────────────────────
-            Box(
-                modifier         = Modifier
-                    .weight(1f)
-                    .fillMaxWidth(),
-                contentAlignment = Alignment.Center
-            ) {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(cardSpacing),
-                    modifier            = Modifier.verticalScroll(rememberScrollState()).padding(24.dp)
-                ) {
-                    val infiniteTransition = rememberInfiniteTransition(label = "title")
-                    val titleScale by infiniteTransition.animateFloat(
-                        initialValue = 1f,
-                        targetValue  = 1.05f,
-                        animationSpec = infiniteRepeatable(
-                            animation  = tween(1000, easing = FastOutSlowInEasing),
-                            repeatMode = RepeatMode.Reverse
-                        ),
-                        label = "titleScale"
-                    )
-
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier            = Modifier.scale(titleScale)
-                    ) {
-                        Text(
-                            text          = "🎯 Equal To",
-                            fontSize      = 48.sp,
-                            fontWeight    = FontWeight.Black,
-                            color         = Color.White,
-                            letterSpacing = 2.sp
-                        )
-                        Text(
-                            text       = "Votre rendez-vous logique du jour",
-                            fontSize   = 18.sp,
-                            fontWeight = FontWeight.Medium,
-                            color      = Color.White.copy(alpha = 0.9f)
-                        )
+                if (landscape) {
+                    Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(20.dp)) {
+                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(gap)) {
+                            HomeHeading(true)
+                            HomeProgress(completedModes.size, totalPlayed, totalWon, true)
+                        }
+                        HomeChallenges(Modifier.weight(1f).fillMaxHeight(), completedModes, !isLoading, true, onModeSelected)
                     }
-
-                    Text(
-                        text = "DÉFIS DU JOUR · ${completedModes.size}/3 terminés",
-                        color = Color.White,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 16.sp
-                    )
-                    Text(
-                        text = if (totalPlayed == 0) "Commencez par le mode facile. À vous de jouer !"
-                            else "$totalPlayed parties · $totalWon victoires · ${totalWon * 100 / totalPlayed} % de réussite",
-                        color = Color.White,
-                        fontSize = 13.sp,
-                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                    )
-                    Text(
-                        text = if (completedModes.size == 3) "Bravo ! Revenez demain pour trois nouvelles énigmes."
-                            else "Une énigme par difficulté. Touchez un défi terminé pour revoir et partager votre résultat.",
-                        color = Color.White.copy(alpha = 0.9f),
-                        fontSize = 12.sp,
-                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                    )
-
-                    val cardsEnabled = !isLoading
-
-                    // ✅ Les cards appellent directement onModeSelected
-                    // La vérification internet est dans MainActivity, pas ici
-                    ModeCard(
-                        title       = "FACILE",
-                        emoji       = "🌱",
-                        description = if (GameMode.EASY in completedModes) "✓ Terminé · Voir mon résultat" else "Pour débuter",
-                        gradient    = listOf(Color(0xFF4CAF50), Color(0xFF8BC34A)),
-                        enabled     = cardsEnabled,
-                        cardHeight  = cardHeight,
-                        cardWidth   = cardWidth,
-                        emojiSize   = cardEmojiSz,
-                        titleSize   = cardTitleSz,
-                        descSize    = cardDescSz,
-                        cardPadding = cardPadding,
-                        onClick     = { onModeSelected(GameMode.EASY) }
-                    )
-
-                    ModeCard(
-                        title       = "MOYEN",
-                        emoji       = "⚡",
-                        description = if (GameMode.MEDIUM in completedModes) "✓ Terminé · Voir mon résultat" else "Un peu plus dur",
-                        gradient    = listOf(Color(0xFFFF9800), Color(0xFFFFB74D)),
-                        enabled     = cardsEnabled,
-                        cardHeight  = cardHeight,
-                        cardWidth   = cardWidth,
-                        emojiSize   = cardEmojiSz,
-                        titleSize   = cardTitleSz,
-                        descSize    = cardDescSz,
-                        cardPadding = cardPadding,
-                        onClick     = { onModeSelected(GameMode.MEDIUM) }
-                    )
-
-                    ModeCard(
-                        title       = "DIFFICILE",
-                        emoji       = "🔥",
-                        description = if (GameMode.HARD in completedModes) "✓ Terminé · Voir mon résultat" else "Expert seulement",
-                        gradient    = listOf(Color(0xFFF44336), Color(0xFFE91E63)),
-                        enabled     = cardsEnabled,
-                        cardHeight  = cardHeight,
-                        cardWidth   = cardWidth,
-                        emojiSize   = cardEmojiSz,
-                        titleSize   = cardTitleSz,
-                        descSize    = cardDescSz,
-                        cardPadding = cardPadding,
-                        onClick     = { onModeSelected(GameMode.HARD) }
-                    )
+                } else {
+                    if (!minimal) HomeHeading(compact)
+                    HomeProgress(completedModes.size, totalPlayed, totalWon, compact)
+                    HomeChallenges(Modifier.weight(1f), completedModes, !isLoading, compact, onModeSelected)
                 }
-            }
-
-            // ── Bannière pub (espace réservé : les cartes ne bougent pas quand elle arrive)
-            Box(
-                modifier         = Modifier
-                    .fillMaxWidth()
-                    .background(Color.Transparent)
-                    .navigationBarsPadding()
-                    .padding(top = 4.dp, bottom = 4.dp)
-                    .height(50.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                if (bannerLoaded) {
-                    AndroidView(
-                        factory  = { bannerAdView },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(50.dp)
-                    )
+                // A fixed slot prevents the controls moving when an advertisement arrives.
+                Box(Modifier.fillMaxWidth().height(50.dp), contentAlignment = Alignment.Center) {
+                    if (bannerLoaded && bannerFits) AndroidView(factory = { banner }, modifier = Modifier.size(320.dp, 50.dp))
                 }
             }
         }
-
-        // ── Overlay chargement ───────────────────────────────────────
         if (isLoading) {
-            Box(
-                modifier         = Modifier
-                    .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.5f)),
-                contentAlignment = Alignment.Center
-            ) {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    CircularProgressIndicator(
-                        modifier    = Modifier.size(64.dp),
-                        color       = Color.White,
-                        strokeWidth = 6.dp
-                    )
-                    Text(
-                        text       = "Chargement...",
-                        fontSize   = 18.sp,
-                        fontWeight = FontWeight.Bold,
-                        color      = Color.White
-                    )
+            Box(Modifier.fillMaxSize().background(HomeInk.copy(alpha = 0.7f)), contentAlignment = Alignment.Center) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    CircularProgressIndicator(color = HomeLime)
+                    Text("Préparation du défi…", color = Color.White)
                 }
             }
         }
@@ -323,71 +124,79 @@ fun ModeSelectScreen(
 }
 
 @Composable
-private fun ModeCard(
-    title       : String,
-    emoji       : String,
-    description : String,
-    gradient    : List<Color>,
-    enabled     : Boolean = true,
-    cardHeight  : Dp = 100.dp,
-    cardWidth   : Dp = 300.dp,
-    emojiSize   : TextUnit = 40.sp,
-    titleSize   : TextUnit = 24.sp,
-    descSize    : TextUnit = 14.sp,
-    cardPadding : Dp = 20.dp,
-    onClick     : () -> Unit
-) {
-    var isPressed by remember { mutableStateOf(false) }
-    val scale by animateFloatAsState(
-        targetValue   = if (isPressed) 0.95f else 1f,
-        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
-        label         = "cardScale"
-    )
+private fun HomeHeading(compact: Boolean) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text("=", modifier = Modifier.background(HomeLime, RoundedCornerShape(12.dp)).padding(horizontal = 12.dp, vertical = 2.dp),
+                color = HomeInk, fontSize = if (compact) 28.sp else 36.sp, fontWeight = FontWeight.Black)
+            Text("Equal To", color = HomeInk, fontSize = if (compact) 32.sp else 42.sp,
+                fontWeight = FontWeight.Black, letterSpacing = (-1).sp,
+                maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+        }
+        if (!compact) Text("Un peu de logique. Un défi chaque jour.", color = HomeMuted, fontSize = 13.sp)
+    }
+}
 
-    Box(
-        modifier = Modifier
-            .scale(scale)
-            .width(cardWidth)
-            .height(cardHeight)
-            .clip(RoundedCornerShape(16.dp))
-            .background(
-                if (enabled) {
-                    Brush.horizontalGradient(gradient)
-                } else {
-                    Brush.horizontalGradient(
-                        listOf(gradient[0].copy(alpha = 0.5f), gradient[1].copy(alpha = 0.5f))
-                    )
-                }
-            )
-            .clickable(enabled = enabled) {
-                isPressed = true
-                onClick()
+@Composable
+private fun HomeProgress(completed: Int, played: Int, won: Int, compact: Boolean) {
+    Column(Modifier.fillMaxWidth().background(HomeInk, RoundedCornerShape(22.dp))
+        .padding(if (compact) 14.dp else 20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                if (!compact) Text("VOTRE RENDEZ-VOUS", color = HomeLime, fontSize = 10.sp, letterSpacing = 1.sp)
+                Text(if (completed == 3) "À demain !" else "Les défis du jour", color = Color.White,
+                    fontSize = if (compact) 18.sp else 23.sp, fontWeight = FontWeight.Bold,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
-            .padding(cardPadding),
-        contentAlignment = Alignment.CenterStart
-    ) {
-        Row(
-            verticalAlignment     = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            Text(
-                text     = emoji,
-                fontSize = emojiSize,
-                modifier = Modifier.scale(if (enabled) 1f else 0.8f)
-            )
-            Column {
-                Text(
-                    text       = title,
-                    fontSize   = titleSize,
-                    fontWeight = FontWeight.Bold,
-                    color      = Color.White.copy(alpha = if (enabled) 1f else 0.6f)
-                )
-                Text(
-                    text     = description,
-                    fontSize = descSize,
-                    color    = Color.White.copy(alpha = if (enabled) 0.9f else 0.5f)
-                )
+            Text("$completed / 3", color = HomeLime, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            repeat(3) { index ->
+                Box(Modifier.weight(1f).height(5.dp).background(
+                    if (index < completed) HomeLime else Color.White.copy(alpha = 0.18f), CircleShape))
+            }
+        }
+        if (!compact) Text(if (played > 0) "$played parties  ·  $won victoires  ·  ${won * 100 / played} % de réussite"
+            else "Trois niveaux, à votre rythme.", color = Color(0xFFD0DCDB), fontSize = 12.sp,
+            maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+}
+
+@Composable
+private fun HomeChallenges(
+    modifier: Modifier,
+    completed: Set<GameMode>,
+    enabled: Boolean,
+    compact: Boolean,
+    onSelect: (GameMode) -> Unit
+) {
+    BoxWithConstraints(modifier) {
+    val showDetails = maxHeight > (250 * LocalDensity.current.fontScale).dp
+    val narrow = maxWidth < 300.dp
+    Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(if (compact) 8.dp else 12.dp)) {
+        Text("Choisissez votre défi", color = HomeInk, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+        GameMode.entries.forEachIndexed { index, mode ->
+            val done = mode in completed
+            val accent = listOf(Color(0xFFD9F279), Color(0xFFFFE2B9), Color(0xFFE2DDFB))[index]
+            Row(Modifier.weight(1f).fillMaxWidth().clip(RoundedCornerShape(20.dp))
+                .background(Color.White).border(1.dp, Color(0xFFE2E8DF), RoundedCornerShape(20.dp))
+                .clickable(enabled = enabled) { onSelect(mode) }.padding(horizontal = if (narrow) 10.dp else 16.dp),
+                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                Box(Modifier.size(if (compact) 36.dp else 44.dp).background(accent, RoundedCornerShape(12.dp)),
+                    contentAlignment = Alignment.Center) {
+                    Text(if (done) "✓" else listOf("+", "×", "÷")[index], fontSize = 25.sp,
+                        color = HomeInk, fontWeight = FontWeight.Bold)
+                }
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text(listOf("Facile", "Moyen", "Difficile")[index], fontSize = if (compact) 17.sp else 20.sp,
+                        fontWeight = FontWeight.Bold, color = HomeInk, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    if (showDetails) Text(if (done) "Terminé · Voir le résultat" else listOf("Pour bien commencer", "Passez à la vitesse supérieure", "À vous de relever le défi")[index],
+                        fontSize = 12.sp, color = HomeMuted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+                Icon(Icons.AutoMirrored.Filled.ArrowForward, if (done) "Voir le résultat" else "Jouer", tint = HomeInk,
+                    modifier = Modifier.size(20.dp))
             }
         }
     }
+}
 }
